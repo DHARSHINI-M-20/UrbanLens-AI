@@ -1,0 +1,38 @@
+UrbanLens AI - Cost and Latency Analysis
+
+Evaluation Dataset
+------------------
+Number of test images: 5
+
+OCR Performance
+---------------
+Average OCR confidence: 53.05%
+Average OCR processing time: 1030.77 ms
+
+Routing Results
+---------------
+OCR accepted: 1/5
+VLM escalated: 4/5
+
+Cost Analysis
+-------------
+OCR execution is performed locally using Tesseract OCR.
+Therefore, no external OCR API cost is incurred.
+
+OCR estimated cost per image: $0.00
+VLM estimated cost per image: $0.01
+Number of VLM escalations: 4
+
+Estimated OCR cost: $0.00
+Estimated VLM cost: $0.04
+Estimated total cost: $0.04
+Estimated average cost per image: $0.008
+
+Note
+----
+The VLM cost is an assumed value used for preliminary cost
+estimation because an actual VLM API has not yet been integrated.
+
+The measured latency represents OCR processing only.
+VLM processing latency and actual API cost will be measured
+after VLM integration.
