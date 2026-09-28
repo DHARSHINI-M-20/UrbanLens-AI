@@ -1,0 +1,57 @@
+UrbanLens AI - OCR Evaluation Summary
+=====================================
+
+Dataset
+-------
+Total Evaluation Images: 5
+
+Target Text Detection
+---------------------
+Target Text Detected: 4
+Target Detection Rate: 80.00%
+
+OCR Routing
+-----------
+OCR Accepted: 1
+OCR Acceptance Rate: 20.00%
+
+VLM Escalation: 4
+VLM Escalation Rate: 80.00%
+
+OCR Metrics
+-----------
+Average OCR Confidence: 53.79%
+Average Target Similarity: 32.90%
+Average Word Coverage: 90.00%
+
+Interpretation
+--------------
+The evaluation uses multiple Tesseract OCR page segmentation
+modes (PSM 6, PSM 11 and PSM 12).
+
+Target Text Detection measures whether the primary
+business/institution/sign text can be identified despite
+OCR noise or minor recognition errors.
+
+The OCR routing system accepts high-confidence results
+and escalates uncertain results to the VLM stage.
+
+The current VLM component is an escalation interface and
+has not yet been connected to an external VLM API.
+
+Limitations
+-----------
+1. The evaluation dataset contains only 5 images.
+2. Images contain background text and visual noise.
+3. OCR performance varies depending on text size,
+   orientation and image quality.
+4. Target Detection Rate is an evaluation metric and
+   should not be treated as production accuracy.
+5. Additional images are required for a stronger evaluation.
+
+Status
+------
+OCR evaluation baseline completed.
+Confidence-based routing implemented.
+VLM escalation interface implemented.
+Actual VLM API integration is pending.
