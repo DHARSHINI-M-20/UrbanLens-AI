@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import httpx
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
@@ -31,9 +31,12 @@ class ReferenceImportInput(BaseModel):
 
 
 @router.get("")
-def list_references() -> list[dict[str, Any]]:
+def list_references(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     try:
-        items = list(get_collection("reference_records").find({"study_area_id": STUDY_AREA_ID}))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("reference_records").find(query))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]

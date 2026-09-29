@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -64,9 +64,12 @@ def run_matching(payload: MatchRequest | None = None) -> dict[str, Any]:
 
 
 @router.get("")
-def list_matches() -> list[dict[str, Any]]:
+def list_matches(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
 	try:
-		items = list(get_collection("matches").find({"study_area_id": STUDY_AREA_ID}).limit(1000))
+		query = {"study_area_id": STUDY_AREA_ID}
+		if dataset_id:
+			query["dataset_id"] = dataset_id
+		items = list(get_collection("matches").find(query).limit(1000))
 	except PyMongoError as exc:
 		raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
 	return [_public(item) for item in items]

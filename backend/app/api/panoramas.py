@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -70,9 +70,12 @@ def discover_panorama(payload: PanoramaDiscoveryInput) -> dict[str, Any]:
 
 
 @router.get("")
-def list_panoramas() -> list[dict[str, Any]]:
+def list_panoramas(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
 	try:
-		items = list(get_collection("panoramas").find({"study_area_id": STUDY_AREA_ID}).limit(500))
+		query = {"study_area_id": STUDY_AREA_ID}
+		if dataset_id:
+			query["dataset_id"] = dataset_id
+		items = list(get_collection("panoramas").find(query).limit(500))
 	except PyMongoError as exc:
 		raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
 	return [_public(item) for item in items]

@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 import EvidenceDrawer from "../components/EvidenceDrawer";
+import DemoModeBanner from "../components/DemoModeBanner";
 
 export default function AppLayout() {
   const location = useLocation();
@@ -19,6 +20,7 @@ export default function AppLayout() {
 
         <main className="min-w-0 flex-1">
           <Header />
+          <DemoModeBanner />
 
           <div key={location.pathname} className="mx-auto max-w-[1700px] animate-page-in px-6 py-6 sm:px-8">
             <Outlet />

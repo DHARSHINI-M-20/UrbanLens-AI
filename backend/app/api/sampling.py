@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -43,12 +43,13 @@ def generate_samples(payload: SamplingRequest) -> dict[str, int | float | str]:
 
 
 @router.get("/points")
-def list_sampling_points() -> list[dict[str, Any]]:
+def list_sampling_points(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     """List currently stored sample coordinates for the official study area."""
     try:
-        return [_public(item) for item in get_collection("sampling_points").find(
-            {"study_area_id": STUDY_AREA_ID}
-        )]
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        return [_public(item) for item in get_collection("sampling_points").find(query)]
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
 

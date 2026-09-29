@@ -11,7 +11,7 @@ from app.services.bedrock_service import BedrockService, NovaLiteStructuredRespo
 
 
 class RouteDecision(BaseModel):
-    model_route: Literal["small_model", "vlm_escalation"]
+    model_route: Literal["small_model", "vlm_escalation", "simulated_escalation"]
     model_name: str
     latency_ms: float = Field(ge=0)
     estimated_cost: float | None = Field(default=None, ge=0)
@@ -116,6 +116,7 @@ class InferenceRouter:
                 "success": True,
                 "vlm_success": False,
                 "nova_lite_invoked": False,
+                "escalation_provider": None,
             }
 
         started = time.perf_counter()
@@ -168,8 +169,9 @@ class InferenceRouter:
             decision.vlm_success = True
             decision.failure_reason = None
             return {
-                "model_route": "vlm_escalation",
-                "model_name": "Amazon Nova Lite",
+                "model_route": "simulated_escalation" if getattr(bedrock, "is_simulated", False) else "vlm_escalation",
+                "model_name": "simulated_nova_lite_mock" if getattr(bedrock, "is_simulated", False) else "Amazon Nova Lite",
+                "escalation_provider": "simulated_mock" if getattr(bedrock, "is_simulated", False) else "amazon_bedrock",
                 "latency_ms": round(small_model_latency_ms + decision.latency_ms, 2),
                 "estimated_cost": decision.estimated_cost,
                 "escalation_reason": decision.reason_for_escalation,
@@ -178,7 +180,8 @@ class InferenceRouter:
                 "result": structured.model_dump(mode="json"),
                 "success": True,
                 "vlm_success": True,
-                "nova_lite_invoked": True,
+                "nova_lite_invoked": not getattr(bedrock, "is_simulated", False),
+                "simulated_escalation_invoked": bool(getattr(bedrock, "is_simulated", False)),
                 "failure_reason": None,
             }
         except (ValidationError, TypeError, ValueError) as exc:

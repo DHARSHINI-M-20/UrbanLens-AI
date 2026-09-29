@@ -132,6 +132,9 @@ def match_reference_record(
         else:
             mismatch_attributes.append(key)
 
+    if mismatch_attributes and normalized >= 0.25:
+        status = "mismatch"
+
     return {
         "match_status": status,
         "status": status.upper(),

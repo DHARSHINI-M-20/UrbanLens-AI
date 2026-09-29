@@ -1,7 +1,8 @@
 import ReviewQueue from "../components/ReviewQueue";
-import { reviewItems } from "../data/mockData";
+import { useDashboard } from "../context/DashboardContext";
 
 export default function ReviewQueuePage() {
+  const { reviews } = useDashboard();
   return (
     <div>
       <div className="mb-5">
@@ -11,7 +12,7 @@ export default function ReviewQueuePage() {
           Confirm, reject or correct low-confidence AI observations.
         </p>
       </div>
-      <ReviewQueue items={reviewItems} />
+      <ReviewQueue items={reviews} />
     </div>
   );
 }

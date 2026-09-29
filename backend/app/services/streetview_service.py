@@ -120,6 +120,9 @@ def normalize_panorama_metadata(
 		available_view_metadata["field_of_view"] = _validated_view_value(
 			metadata["field_of_view"], "field_of_view", 0.000001, 180
 		)
+	quality = metadata.get("quality")
+	if isinstance(quality, Mapping):
+		available_view_metadata["quality"] = dict(quality)
 
 	captured_at: datetime | None = None
 	raw_capture_date = metadata.get("captured_at", metadata.get("capture_date", metadata.get("date")))
@@ -140,4 +143,8 @@ def normalize_panorama_metadata(
 		available_headings=headings,
 		available_view_metadata=available_view_metadata,
 		evidence_reference=metadata.get("evidence_reference"),
+		provider=str(metadata.get("provider") or source),
+		simulation=bool(metadata.get("simulation", False)),
+		dataset_id=metadata.get("dataset_id"),
+		group_id=metadata.get("group_id"),
 	)

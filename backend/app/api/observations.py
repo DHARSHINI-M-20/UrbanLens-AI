@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -86,9 +86,12 @@ def _building_identity(observation: dict[str, Any]) -> str | None:
 
 
 @router.get("")
-def list_observations() -> list[dict[str, Any]]:
+def list_observations(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     try:
-        items = list(get_collection("observations").find({"study_area_id": STUDY_AREA_ID}))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("observations").find(query))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]
@@ -109,9 +112,12 @@ def create_observation(payload: ObservationInput) -> dict[str, Any]:
 
 
 @router.get("/ocr")
-def list_ocr_observations() -> list[dict[str, Any]]:
+def list_ocr_observations(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     try:
-        items = list(get_collection("ocr_observations").find({"study_area_id": STUDY_AREA_ID}).limit(1000))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("ocr_observations").find(query).limit(1000))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [_public(item) for item in items]
@@ -124,6 +130,7 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="No vision detector is configured for observation processing.")
     try:
         import base64
+        import time
 
         try:
             image_bytes = base64.b64decode(payload.image_base64, validate=True)
@@ -145,12 +152,17 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
             "heading": view.get("heading"),
             "pitch": view.get("pitch"),
             "field_of_view": view.get("field_of_view"),
+            "street_id": view.get("street_id"),
             "source_mode": view.get("source_mode", "unknown"),
             "study_area_id": STUDY_AREA_ID,
         }
         result = _pipeline.process(context)
         observations = result["observations"]
-        references = list(get_collection("reference_records").find({"study_area_id": STUDY_AREA_ID}))
+        dataset_id = context.get("dataset_id")
+        reference_query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            reference_query["dataset_id"] = dataset_id
+        references = list(get_collection("reference_records").find(reference_query))
         grouped_references: dict[str, list[dict[str, Any]]] = {}
         for reference in references:
             source = str(reference.get("reference_source") or reference.get("source_type") or reference.get("source") or "unspecified")
@@ -162,17 +174,25 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
         match_results: list[dict[str, Any]] = []
         reviews: list[dict[str, Any]] = []
         footprints = [reference for reference in references if reference.get("geometry")]
+        positioning_started = time.perf_counter()
         for observation in observations:
             observation["created_at"] = now
+            observation["dataset_id"] = dataset_id
+            observation["simulation"] = bool(context.get("simulation"))
+            observation["provenance"] = context.get("provenance")
+            if context.get("simulation"):
+                observation["source"] = "SIMULATED_DEMONSTRATION"
             observation["positioning"] = None
             match = match_observation(observation, reference_adapter)
-            match.update({"study_area_id": STUDY_AREA_ID, "created_at": now})
+            match.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
+                          "dataset_id": dataset_id, "simulation": bool(context.get("simulation"))})
             observation["match_status"] = match["match_status"]
             observation["match_record"] = match
             observation["reference_id"] = match["matched_reference_id"]
             if observation["asset_type"] == "building":
                 prior_buildings = list(get_collection("observations").find({
                     "study_area_id": STUDY_AREA_ID,
+                    **({"dataset_id": dataset_id} if dataset_id else {}),
                     "asset_type": "building",
                     "source_view_id": {"$ne": payload.view_id},
                 }).limit(2000))
@@ -223,6 +243,8 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
                 review = {
                     "review_id": f"review_{observation['observation_id']}",
                     "observation_id": observation["observation_id"],
+                    "confidence": observation["confidence"],
+                    "source_view_id": observation.get("source_view_id"),
                     "reason": "low_confidence_or_unmatched" if observation["confidence"] < 0.7 or match["match_status"] != "matched" else "positioning_requires_review",
                     "priority": "high" if observation["confidence"] < 0.5 else "medium",
                     "status": "needs_review" if observation["confidence"] < 0.5 else "pending",
@@ -231,24 +253,37 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
                     "created_at": now,
                     "reviewed_at": None,
                     "study_area_id": STUDY_AREA_ID,
+                    "dataset_id": dataset_id,
+                    "simulation": bool(context.get("simulation")),
                 }
                 get_collection("review_queue").replace_one({"review_id": review["review_id"]}, review, upsert=True)
                 reviews.append(review)
+            positioning_latency_ms = round((time.perf_counter() - positioning_started) * 1000, 2)
 
         for ocr_result in result["ocr_results"]:
-            ocr_result.update({"study_area_id": STUDY_AREA_ID, "created_at": now})
+            ocr_result.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
+                               "dataset_id": dataset_id, "simulation": bool(context.get("simulation")),
+                               "source": "SIMULATED_DEMONSTRATION" if context.get("simulation") else ocr_result.get("source")})
             get_collection("ocr_observations").replace_one({"ocr_id": ocr_result["ocr_id"]}, ocr_result, upsert=True)
 
         discrepancies = detect_discrepancies(observations=observations, references=references)
         for discrepancy in discrepancies:
-            discrepancy.update({"study_area_id": STUDY_AREA_ID, "created_at": now})
+            discrepancy.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
+                                "dataset_id": dataset_id, "simulation": bool(context.get("simulation")),
+                                "provenance": context.get("provenance")})
             get_collection("discrepancies").replace_one(
                 {"discrepancy_id": discrepancy["discrepancy_id"]}, discrepancy, upsert=True,
             )
 
-        all_observations = list(get_collection("observations").find({"study_area_id": STUDY_AREA_ID}).limit(5000))
+        all_observations = list(get_collection("observations").find({
+            "study_area_id": STUDY_AREA_ID,
+            **({"dataset_id": dataset_id} if dataset_id else {}),
+        }).limit(5000))
         for fused in fuse_nearby_observations(all_observations):
             fused["study_area_id"] = STUDY_AREA_ID
+            fused["dataset_id"] = dataset_id
+            fused["simulation"] = bool(context.get("simulation"))
+            fused["provenance"] = context.get("provenance")
             get_collection("unified_entities").replace_one(
                 {"canonical_observation_id": fused["canonical_observation_id"]}, with_location(fused), upsert=True,
             )
@@ -275,6 +310,9 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
             "Configure per-invocation prices for: " + ", ".join(missing_price_keys)
             if missing_price_keys else None
         )
+        if context.get("simulation"):
+            estimated_cost = None
+            cost_unavailable_reason = "Cost unavailable - pricing not configured for real providers; simulated fixtures are not billable."
         all_vlm_cost = (
             settings.nova_lite_cost_per_invocation
             if settings.nova_lite_cost_per_invocation is not None else None
@@ -286,8 +324,8 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
         metrics_service = ProcessingMetricsService()
         metrics = metrics_service.record_view(
             view_id=payload.view_id,
-            small_model_used=True,
-            vlm_used=routing.get("escalation_reason") is not None,
+            small_model_used=execution["detector_invocations"] > 0,
+            vlm_used=routing["model_route"] == "vlm_escalation",
             model_route=routing["model_route"],
             latency_ms=result["processing_latency_ms"],
             estimated_cost=estimated_cost,
@@ -302,16 +340,22 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
             low_confidence_observations=sum(item["confidence"] < 0.7 for item in observations),
             detector_invocations=execution["detector_invocations"],
             ocr_invocations=execution["ocr_invocations"],
+            simulated_detector_invocations=execution["simulated_detector_invocations"],
+            simulated_ocr_invocations=execution["simulated_ocr_invocations"],
             nova_lite_invocations=execution["nova_lite_invocations"],
             nova_lite_invocation_attempts=execution["nova_lite_invocation_attempts"],
+            simulated_escalation_invocations=execution["simulated_escalation_invocations"],
             detector_latency_ms=execution["detector_latency_ms"],
             ocr_latency_ms=execution["ocr_latency_ms"],
             nova_lite_latency_ms=execution["nova_lite_latency_ms"],
+            positioning_latency_ms=positioning_latency_ms,
             cost_status="available" if estimated_cost is not None else "unavailable",
             cost_unavailable_reason=cost_unavailable_reason,
         )
         metrics.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
-                        "vlm_failure": not routing.get("success", True)})
+                        "vlm_failure": not routing.get("success", True),
+                        "dataset_id": dataset_id, "simulation": bool(context.get("simulation")),
+                        "provenance": context.get("provenance")})
         get_collection("processing_metrics").replace_one({"view_id": payload.view_id}, metrics, upsert=True)
     except HTTPException:
         raise

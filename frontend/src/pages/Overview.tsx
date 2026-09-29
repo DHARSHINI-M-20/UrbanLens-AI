@@ -5,12 +5,11 @@ import KPICards from "../components/KPICards";
 import ProcessingStatus from "../components/ProcessingStatus";
 import StatusBadge from "../components/StatusBadge";
 import { useDashboard } from "../context/DashboardContext";
-import { reviewItems } from "../data/mockData";
 
 export default function Overview() {
-  const { discrepancies } = useDashboard();
+  const { discrepancies, reviews, seeded } = useDashboard();
   const topDiscrepancies = discrepancies.slice(0, 4);
-  const topFindings = reviewItems.slice(0, 3);
+  const topFindings = reviews.slice(0, 3);
 
   return (
     <div>
@@ -49,8 +48,8 @@ export default function Overview() {
           <div className="flex shrink-0 items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
             <div>
-              <strong className="block text-[13px] font-bold text-emerald-300">Analysis Active</strong>
-              <span className="block text-[10px] text-emerald-400/70">Street View intelligence pipeline running</span>
+              <strong className="block text-[13px] font-bold text-emerald-300">{seeded ? "Demo pipeline ready" : "Demo dataset not seeded"}</strong>
+              <span className="block text-[10px] text-emerald-400/70">Backend records · simulation clearly labeled</span>
             </div>
           </div>
         </div>

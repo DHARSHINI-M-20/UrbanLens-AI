@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pymongo.errors import PyMongoError
 
 from app.database.mongodb import get_collection
@@ -15,18 +15,24 @@ router = APIRouter()
 
 
 @router.get("")
-def list_metrics() -> list[dict[str, Any]]:
+def list_metrics(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     try:
-        items = list(get_collection("processing_metrics").find({"study_area_id": STUDY_AREA_ID}))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("processing_metrics").find(query))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]
 
 
 @router.get("/summary")
-def metrics_summary() -> dict[str, Any]:
+def metrics_summary(dataset_id: str | None = Query(default=None)) -> dict[str, Any]:
     try:
-        items = list(get_collection("processing_metrics").find({"study_area_id": STUDY_AREA_ID}))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("processing_metrics").find(query))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     metrics = ProcessingMetricsService()

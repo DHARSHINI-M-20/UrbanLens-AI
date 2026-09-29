@@ -111,6 +111,10 @@ class ObservationPipelineService:
             if ocr_count_before is not None and ocr_count_after is not None
             else int(getattr(self.ocr_provider, "name", "") not in {"unconfigured", "mock_fixture"})
         )
+        simulated_detector_invocations = detector_invocations if str(getattr(self.vision_provider, "name", "")).startswith("simulated") else 0
+        simulated_ocr_invocations = ocr_invocations if str(getattr(self.ocr_provider, "name", "")).startswith("simulated") else 0
+        detector_invocations -= simulated_detector_invocations
+        ocr_invocations -= simulated_ocr_invocations
         small_model_latency_ms = round(detector_latency_ms + ocr_latency_ms, 2)
 
         if not observations:
@@ -163,6 +167,7 @@ class ObservationPipelineService:
                         ("building_use", "building_use"),
                         ("frontage", "frontage"),
                         ("building_name", "building_name"),
+                        ("condition", "condition"),
                     ):
                         value = routed_result.get(source_key)
                         if value is not None:
@@ -176,6 +181,8 @@ class ObservationPipelineService:
                 "estimated_cost": routed.get("estimated_cost"),
                 "success": routed["success"],
                 "vlm_success": routed["vlm_success"],
+                "escalation_provider": routed.get("escalation_provider"),
+                "simulated_escalation_invoked": routed.get("simulated_escalation_invoked", False),
                 "failure_reason": routed.get("failure_reason"),
                 "nova_lite_invoked": routed.get("nova_lite_invoked", False),
             }
@@ -188,6 +195,7 @@ class ObservationPipelineService:
                 "final_confidence": routing["final_confidence"] if routing["final_confidence"] is not None else observation["confidence"],
                 "latency_ms": routing["latency_ms"],
                 "estimated_cost": routing["estimated_cost"],
+                "escalation_provider": routing.get("escalation_provider"),
             })
         return {
             "view_id": str(view_context.get("view_id")),
@@ -198,8 +206,11 @@ class ObservationPipelineService:
             "provider_execution": {
                 "detector_invocations": detector_invocations,
                 "ocr_invocations": ocr_invocations,
+                "simulated_detector_invocations": simulated_detector_invocations,
+                "simulated_ocr_invocations": simulated_ocr_invocations,
                 "nova_lite_invocations": int(routing["nova_lite_invoked"]),
                 "nova_lite_invocation_attempts": int(routing["escalation_reason"] is not None),
+                "simulated_escalation_invocations": int(routing.get("simulated_escalation_invoked", False)),
                 "detector_latency_ms": detector_latency_ms,
                 "ocr_latency_ms": ocr_latency_ms,
                 "nova_lite_latency_ms": round(max(0.0, float(routing["latency_ms"]) - small_model_latency_ms), 2)

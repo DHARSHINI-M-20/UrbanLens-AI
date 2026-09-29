@@ -8,7 +8,7 @@ interface Props {
   onSelect: (building: Building) => void;
 }
 
-const columns = ["ID", "Street", "Type", "Floors", "OCR", "Match", "Confidence", "Status", ""];
+const columns = ["ID", "Street", "Location", "Entity", "Floors / use", "OCR", "Match", "Position", "Confidence", "Discrepancy / review", "Route / source", ""];
 
 export default function DiscrepancyTable({ buildings, onSelect }: Props) {
   return (
@@ -23,7 +23,7 @@ export default function DiscrepancyTable({ buildings, onSelect }: Props) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[850px] border-collapse">
+        <table className="w-full min-w-[1450px] border-collapse">
           <thead>
             <tr className="border-b border-white/8 bg-white/[0.02] text-left">
               {columns.map((col) => (
@@ -49,13 +49,17 @@ export default function DiscrepancyTable({ buildings, onSelect }: Props) {
               >
                 <td className="px-5 py-4 text-sm font-bold text-white">{building.id}</td>
                 <td className="px-5 py-4 text-sm text-slate-300">{building.street}</td>
-                <td className="px-5 py-4 text-sm text-slate-300">{building.buildingType ?? building.type}</td>
-                <td className="px-5 py-4 text-sm font-semibold text-slate-200">{building.floors}</td>
+                <td className="px-5 py-4 text-xs text-slate-400">{building.latitude.toFixed(5)}, {building.longitude.toFixed(5)}</td>
+                <td className="px-5 py-4 text-sm text-slate-300">{building.assetType}</td>
+                <td className="px-5 py-4 text-xs text-slate-300">{building.floors || "?"} · {String(building.attributes?.building_use ?? "unknown")}</td>
                 <td className="max-w-[160px] truncate px-5 py-4 text-sm text-slate-400">{building.ocr}</td>
                 <td className="px-5 py-4 text-sm font-semibold text-slate-200">{building.matchedProperty}</td>
+                <td className="px-5 py-4 text-xs text-slate-400">{building.positionConfidence == null ? "Unvalidated" : `${Math.round(building.positionConfidence * 100)}%`}</td>
                 <td className="px-5 py-4 text-sm font-bold text-white">{building.confidence}%</td>
-                <td className="px-5 py-4"><StatusBadge status={building.status} /></td>
+                <td className="max-w-[220px] px-5 py-4 text-xs text-slate-400">{building.discrepancy || building.reviewStatus}</td>
+                <td className="px-5 py-4 text-xs text-slate-400">{building.modelRoute} · {building.provenance}</td>
                 <td className="px-5 py-4">
+                  <StatusBadge status={building.status} />
                   <button
                     onClick={(e) => { e.stopPropagation(); onSelect(building); }}
                     className="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-cyan-400"

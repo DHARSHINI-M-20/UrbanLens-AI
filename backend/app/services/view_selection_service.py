@@ -127,6 +127,9 @@ def select_useful_views(
                 "priority": priority,
                 "source": view.get("source", "authorized_provider"),
                 "source_mode": view.get("source_mode", "unknown"),
+                "provider": view.get("provider"),
+                "simulation": bool(view.get("simulation", False)),
+                "dataset_id": view.get("dataset_id"),
                 "status": status,
             })
 

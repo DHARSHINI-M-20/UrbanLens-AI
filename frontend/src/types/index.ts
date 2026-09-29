@@ -3,7 +3,8 @@ export type Status =
   | "PARTIAL"
   | "UNMATCHED"
   | "LOW CONFIDENCE"
-  | "NOT VERIFIED";
+  | "NOT VERIFIED"
+  | "MISMATCH";
 
 export type BuildingType =
   | "Residential"
@@ -41,6 +42,22 @@ export interface Building {
   status: Status;
   buildingType?: BuildingType;
   processing?: string;
+  observationId?: string;
+  assetType?: string;
+  attributes?: Record<string, unknown>;
+  positionConfidence?: number | null;
+  positionMethod?: string;
+  sourceViewId?: string;
+  heading?: number | null;
+  fieldOfView?: number | null;
+  modelRoute?: string;
+  matchStatus?: string;
+  discrepancy?: string;
+  reviewStatus?: string;
+  provenance?: string;
+  simulation?: boolean;
+  rawRecord?: Record<string, unknown>;
+  streetId?: string;
 }
 
 export type ReviewAction = "pending" | "confirmed" | "rejected" | "corrected";
@@ -53,6 +70,10 @@ export interface ReviewItem {
   confidence: number;
   buildingId?: string;
   detail?: string;
+  reviewId?: string;
+  observationId?: string;
+  status?: string;
+  rawRecord?: Record<string, unknown>;
 }
 
 export interface Asset {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -35,9 +35,12 @@ class ViewSelectionInput(BaseModel):
 
 
 @router.get("")
-def list_views() -> list[dict[str, Any]]:
+def list_views(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     try:
-        items = list(get_collection("views").find({"study_area_id": STUDY_AREA_ID}))
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        items = list(get_collection("views").find(query))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]
@@ -80,7 +83,11 @@ def select_views(payload: ViewSelectionInput) -> dict[str, Any]:
                 "field_of_view": metadata.get("field_of_view"),
                 "quality": metadata.get("quality"),
                 "source": panorama.get("source", "unknown"),
-                "source_mode": "synthetic_fixture" if "mock" in str(panorama.get("source", "")).lower() or "synthetic" in str(panorama.get("source", "")).lower() else "provider",
+                "source_mode": "simulated_fixture" if panorama.get("simulation") else "provider",
+                "provider": panorama.get("provider"),
+                "simulation": bool(panorama.get("simulation", False)),
+                "dataset_id": panorama.get("dataset_id"),
+                "group_id": panorama.get("group_id"),
                 "status": "ready",
             })
         selected = select_useful_views(

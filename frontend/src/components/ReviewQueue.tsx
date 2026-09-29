@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { AlertTriangle, Check, Pencil, X } from "lucide-react";
 
+import { useDashboard } from "../context/DashboardContext";
 import type { ReviewAction, ReviewItem } from "../types";
 
 const actionLabels: Record<ReviewAction, string> = {
@@ -18,12 +18,8 @@ const actionStyles: Record<ReviewAction, string> = {
 };
 
 export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
-  const [statuses, setStatuses] = useState<Record<string, ReviewAction>>({});
-
-  const setAction = (id: string, action: ReviewAction) =>
-    setStatuses((prev) => ({ ...prev, [id]: action }));
-
-  const pendingCount = items.filter((i) => (statuses[i.id] ?? "pending") === "pending").length;
+  const { decideReview, busy } = useDashboard();
+  const pendingCount = items.filter((item) => !["approved", "rejected", "corrected"].includes(item.status ?? "pending")).length;
 
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5">
@@ -39,8 +35,13 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
       </div>
 
       <div className="mt-4 flex flex-col gap-3">
+        {items.length === 0 && <p className="m-0 py-8 text-center text-sm text-slate-500">No observations currently require review.</p>}
         {items.map((item) => {
-          const action = statuses[item.id] ?? "pending";
+          const action = item.status === "corrected" ? "corrected" : item.status === "approved" ? "confirmed" : item.status === "rejected" ? "rejected" : "pending";
+          const evidence = item.rawRecord ?? {};
+          const observation = (evidence.observation ?? {}) as Record<string, unknown>;
+          const discrepancy = (evidence.discrepancy ?? {}) as Record<string, unknown>;
+          const reference = (evidence.reference ?? {}) as Record<string, unknown>;
           return (
             <div
               key={item.id}
@@ -52,6 +53,13 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
                   <h3 className="m-0 mt-1 text-sm font-bold text-white">{item.title}</h3>
                   {item.detail && <p className="m-0 mt-1 text-xs font-semibold text-slate-400">{item.detail}</p>}
                   <p className="m-0 mt-1 text-xs leading-5 text-slate-500">{item.description}</p>
+                  <p className="m-0 mt-2 text-[11px] text-slate-400">
+                    {String(observation.asset_type ?? "Observation")} · {String(observation.observation_id ?? item.observationId)} · OCR: {String(observation.ocr_text ?? "none")}
+                  </p>
+                  <p className="m-0 mt-1 text-[11px] text-slate-500">
+                    Match: {String(observation.match_status ?? "unmatched")} · reference: {String(reference.reference_id ?? "none")}
+                  </p>
+                  {Boolean(discrepancy.description) && <p className="m-0 mt-1 text-[11px] text-amber-200/80">{String(discrepancy.description)}</p>}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <span
@@ -77,7 +85,8 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
 
               <div className="mt-3.5 grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => setAction(item.id, "confirmed")}
+                  disabled={busy || action === "confirmed"}
+                  onClick={() => void decideReview(item, "approved", "confirmed")}
                   className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-bold transition ${
                     action === "confirmed" ? "bg-emerald-500 text-white" : "bg-white/6 text-slate-300 hover:bg-emerald-500/20 hover:text-emerald-300"
                   }`}
@@ -85,7 +94,8 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
                   <Check size={13} /> Confirm
                 </button>
                 <button
-                  onClick={() => setAction(item.id, "rejected")}
+                  disabled={busy || action === "rejected"}
+                  onClick={() => void decideReview(item, "rejected")}
                   className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-bold transition ${
                     action === "rejected" ? "bg-red-500 text-white" : "bg-white/6 text-slate-300 hover:bg-red-500/20 hover:text-red-300"
                   }`}
@@ -93,7 +103,8 @@ export default function ReviewQueue({ items }: { items: ReviewItem[] }) {
                   <X size={13} /> Reject
                 </button>
                 <button
-                  onClick={() => setAction(item.id, "corrected")}
+                  disabled={busy || action === "confirmed"}
+                  onClick={() => void decideReview(item, "approved", "corrected")}
                   className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-[11px] font-bold transition ${
                     action === "corrected" ? "bg-cyan-500 text-white" : "bg-white/6 text-slate-300 hover:bg-cyan-500/20 hover:text-cyan-300"
                   }`}

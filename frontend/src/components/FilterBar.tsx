@@ -26,6 +26,7 @@ export default function FilterBar({
           <option value="All">All Status</option>
           <option value="MATCHED">Matched</option>
           <option value="PARTIAL">Partial</option>
+          <option value="MISMATCH">Mismatch</option>
           <option value="UNMATCHED">Unmatched</option>
           <option value="LOW CONFIDENCE">Low Confidence</option>
           <option value="NOT VERIFIED">Not Verified</option>

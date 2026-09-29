@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
@@ -25,12 +25,13 @@ def _public(document: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("")
-def list_streets() -> list[dict[str, Any]]:
+def list_streets(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
     """List imported roads that belong to the official challenge study area."""
     try:
-        return [_public(item) for item in get_collection("streets").find(
-            {"study_area_id": STUDY_AREA_ID}
-        )]
+        query = {"study_area_id": STUDY_AREA_ID}
+        if dataset_id:
+            query["dataset_id"] = dataset_id
+        return [_public(item) for item in get_collection("streets").find(query)]
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
 

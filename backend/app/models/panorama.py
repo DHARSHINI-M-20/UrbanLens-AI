@@ -17,3 +17,7 @@ class Panorama(BaseModel):
     available_headings: list[float] = Field(default_factory=list)
     available_view_metadata: dict[str, Any] = Field(default_factory=dict)
     evidence_reference: str | None = None
+    provider: str | None = None
+    simulation: bool = False
+    dataset_id: str | None = None
+    group_id: str | None = None

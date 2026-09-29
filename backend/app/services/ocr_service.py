@@ -142,6 +142,9 @@ def process_view_ocr(view_context: Mapping[str, Any], provider: OCRProvider) -> 
             "bounding_region": result.get("bounding_region", result.get("bounding_box")),
             "source_view_id": view_id,
             "source": str(result.get("source") or provider.name),
+            "dataset_id": view_context.get("dataset_id"),
+            "simulation": bool(view_context.get("simulation", False)),
+            "provenance": view_context.get("provenance") or view_context.get("source_mode") or "unknown",
             "review_status": "pending" if confidence is not None and confidence >= 0.5 else "needs_review",
             "processing_time_ms": result.get("processing_time_ms"),
         })

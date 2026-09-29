@@ -10,13 +10,19 @@ FUSABLE_TYPES = {"building", "streetlight", "electric_pole", "signboard"}
 
 
 def _distance_meters(first: dict[str, Any], second: dict[str, Any]) -> float | None:
-    if first.get("latitude") is None or first.get("longitude") is None:
+    first_position = first.get("positioning") if isinstance(first.get("positioning"), dict) else {}
+    second_position = second.get("positioning") if isinstance(second.get("positioning"), dict) else {}
+    first_latitude = first_position.get("latitude") if first_position.get("latitude") is not None else first.get("latitude")
+    first_longitude = first_position.get("longitude") if first_position.get("longitude") is not None else first.get("longitude")
+    second_latitude = second_position.get("latitude") if second_position.get("latitude") is not None else second.get("latitude")
+    second_longitude = second_position.get("longitude") if second_position.get("longitude") is not None else second.get("longitude")
+    if first_latitude is None or first_longitude is None:
         return None
-    if second.get("latitude") is None or second.get("longitude") is None:
+    if second_latitude is None or second_longitude is None:
         return None
-    lat1, lat2 = math.radians(float(first["latitude"])), math.radians(float(second["latitude"]))
+    lat1, lat2 = math.radians(float(first_latitude)), math.radians(float(second_latitude))
     delta_lat = lat2 - lat1
-    delta_lon = math.radians(float(second["longitude"]) - float(first["longitude"]))
+    delta_lon = math.radians(float(second_longitude) - float(first_longitude))
     arc = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
     return 6_371_000 * 2 * math.asin(math.sqrt(min(1.0, arc)))
 
@@ -94,6 +100,9 @@ def fuse_observations(
         "fused_attributes": fused_attributes,
         "fused_confidence": fused_confidence,
         "fusion_method": "spatial_proximity_and_attribute_compatibility",
+        "dataset_id": observations[0].get("dataset_id"),
+        "simulation": any(bool(obs.get("simulation")) for obs in observations),
+        "provenance": observations[0].get("provenance"),
     }
 
 

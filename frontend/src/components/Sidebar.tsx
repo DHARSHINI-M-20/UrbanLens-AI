@@ -1,8 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { NAV_MAIN, NAV_MANAGEMENT, type NavItem } from "../data/navigation";
+import { useDashboard } from "../context/DashboardContext";
 
 export default function Sidebar() {
+  const { seeded, error } = useDashboard();
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
 
@@ -61,8 +63,8 @@ export default function Sidebar() {
       <div className="mt-auto flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 p-3">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.2)]" />
         <div className="min-w-0">
-          <strong className="block truncate text-[11px] font-bold">AI Engine Online</strong>
-          <span className="block truncate text-[10px] text-indigo-300">All systems operational</span>
+          <strong className="block truncate text-[11px] font-bold">{error ? "Backend unavailable" : seeded ? "Demo data ready" : "Backend connected"}</strong>
+          <span className="block truncate text-[10px] text-indigo-300">{error ? "Check API connection" : seeded ? "Simulated dataset" : "Seed demo to begin"}</span>
         </div>
       </div>
     </aside>

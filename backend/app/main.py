@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.api import (
     analytics,
+    demo,
     discrepancies,
     matching,
     metrics,
@@ -59,5 +60,6 @@ app.include_router(discrepancies.router, prefix="/discrepancies", tags=["discrep
 app.include_router(review.router, prefix="/reviews", tags=["reviews"])
 app.include_router(review.router, prefix="/review", tags=["review"])  # backward-compatible alias
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(demo.router, prefix="/demo", tags=["demo"])
 app.include_router(queries.router, prefix="/queries", tags=["queries"])
 app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])

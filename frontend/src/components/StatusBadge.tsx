@@ -4,6 +4,7 @@ const styles: Record<string, string> = {
   MATCHED: "bg-emerald-400/10 text-emerald-400",
   Completed: "bg-emerald-400/10 text-emerald-400",
   PARTIAL: "bg-amber-400/10 text-amber-400",
+  MISMATCH: "bg-rose-400/10 text-rose-300",
   Review: "bg-amber-400/10 text-amber-400",
   UNMATCHED: "bg-red-400/10 text-red-400",
   "LOW CONFIDENCE": "bg-orange-400/10 text-orange-400",

@@ -4,15 +4,14 @@ import {
   MapContainer,
   Marker,
   Popup,
-  TileLayer,
+  GeoJSON,
+  CircleMarker,
   useMap,
 } from "react-leaflet";
 
 import L from "leaflet";
 
 import { Building2, Lightbulb, Zap } from "lucide-react";
-
-import { assets } from "../data/mockData";
 
 import type { Asset, Building, Status } from "../types";
 
@@ -26,17 +25,17 @@ import "leaflet/dist/leaflet.css";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const SafeMapContainer = MapContainer as any;
 const SafeMarker = Marker as any;
-const SafeTileLayer = TileLayer as any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 interface InteractiveMapProps {
   buildings: Building[];
+  streets: Record<string, unknown>[];
+  samplingPoints: Record<string, unknown>[];
+  studyArea: GeoJSON.FeatureCollection | null;
   onBuildingSelect?: (building: Building) => void;
 }
 
-const mapCenter: [number, number] = [10.9995, 78.1195];
-
-const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const mapCenter: [number, number] = [11.032, 76.98];
 
 function validCoordinate(lat: unknown, lng: unknown): lat is number {
   return (
@@ -50,6 +49,7 @@ function validCoordinate(lat: unknown, lng: unknown): lat is number {
 const statusColors: Record<Status, string> = {
   MATCHED: "#22c55e",
   PARTIAL: "#f59e0b",
+  MISMATCH: "#fb7185",
   UNMATCHED: "#ef4444",
   "LOW CONFIDENCE": "#f97316",
   "NOT VERIFIED": "#94a3b8",
@@ -94,6 +94,7 @@ function getStatusClass(status: Status) {
   switch (status) {
     case "MATCHED": return "matched";
     case "PARTIAL": return "partial";
+    case "MISMATCH": return "unmatched";
     case "UNMATCHED": return "unmatched";
     case "LOW CONFIDENCE": return "low";
     case "NOT VERIFIED": return "not-verified";
@@ -155,9 +156,11 @@ function AssetPopup({ asset }: { asset: Asset }) {
   );
 }
 
-export default function InteractiveMap({ buildings, onBuildingSelect }: InteractiveMapProps) {
+export default function InteractiveMap({ buildings, streets, samplingPoints, studyArea, onBuildingSelect }: InteractiveMapProps) {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [tileStyle, setTileStyle] = useState<"standard" | "dark">("dark");
+  const buildingRecords = buildings.filter((record) => record.assetType === "building");
+  const assetRecords = buildings.filter((record) => record.assetType && record.assetType !== "building");
 
   return (
     <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
@@ -170,13 +173,13 @@ export default function InteractiveMap({ buildings, onBuildingSelect }: Interact
 
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-            <Building2 size={15} className="text-indigo-400" /> {buildings.length} Buildings
+            <Building2 size={15} className="text-indigo-400" /> {buildingRecords.length} Buildings
           </div>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-            <Lightbulb size={15} className="text-amber-400" /> {assets.filter((a) => a.type === "Streetlight").length} Streetlights
+            <Lightbulb size={15} className="text-amber-400" /> {assetRecords.filter((a) => a.assetType === "streetlight").length} Streetlights
           </div>
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-            <Zap size={15} className="text-violet-400" /> {assets.filter((a) => a.type === "Electric Pole").length} Poles
+            <Zap size={15} className="text-violet-400" /> {assetRecords.filter((a) => a.assetType === "electric_pole").length} Poles
           </div>
         </div>
       </div>
@@ -193,9 +196,27 @@ export default function InteractiveMap({ buildings, onBuildingSelect }: Interact
         >
           <MapReadyBinder onReady={setMapInstance} />
 
-          <SafeTileLayer attribution="&copy; OpenStreetMap contributors" url={OSM_TILE_URL} />
+          {studyArea && <GeoJSON data={studyArea} style={{ color: "#22d3ee", weight: 2, fillOpacity: 0.04 }} />}
+          {streets.map((street) => {
+            const geometry = street.geometry as GeoJSON.Geometry | undefined;
+            if (!geometry) return null;
+            const feature: GeoJSON.Feature = {
+              type: "Feature", geometry, properties: { name: street.name, street_id: street.street_id },
+            };
+            return <GeoJSON key={String(street.street_id)} data={feature}
+              style={{ color: "#fbbf24", weight: 4, opacity: 0.9 }} />;
+          })}
+          {samplingPoints.map((sample) => {
+            const latitude = Number(sample.latitude);
+            const longitude = Number(sample.longitude);
+            if (!validCoordinate(latitude, longitude)) return null;
+            return <CircleMarker key={String(sample.sample_id)} center={[latitude, longitude]} radius={3}
+              pathOptions={{ color: "#f8fafc", fillColor: "#38bdf8", fillOpacity: 0.8 }}>
+              <Popup>Simulated sampling point · {String(sample.status ?? "pending")}</Popup>
+            </CircleMarker>;
+          })}
 
-          {buildings
+          {buildingRecords
             .filter((b) => validCoordinate(b.latitude, b.longitude))
             .map((building) => (
               <SafeMarker
@@ -213,12 +234,25 @@ export default function InteractiveMap({ buildings, onBuildingSelect }: Interact
               </SafeMarker>
             ))}
 
-          {assets
+          {assetRecords
             .filter((a) => validCoordinate(a.latitude, a.longitude))
+            .map((record) => ({
+              id: record.id,
+              type: record.assetType === "electric_pole" ? "Electric Pole" : record.assetType === "streetlight" ? "Streetlight" : record.assetType ?? "Asset",
+              street: record.street,
+              confidence: record.confidence,
+              latitude: record.latitude,
+              longitude: record.longitude,
+              status: record.status,
+              record,
+            } as Asset & { record: Building }))
             .map((asset) => (
               <SafeMarker key={asset.id} position={[asset.latitude, asset.longitude]} icon={createAssetIcon(asset)}>
                 <Popup>
                   <AssetPopup asset={asset} />
+                  <button className="popup-view-button" onClick={() => onBuildingSelect?.(asset.record)}>
+                    View Evidence
+                  </button>
                 </Popup>
               </SafeMarker>
             ))}
@@ -237,7 +271,7 @@ export default function InteractiveMap({ buildings, onBuildingSelect }: Interact
           <div>
             <strong className="block text-[11px] font-bold text-white">Live Intelligence Layer</strong>
             <span className="block text-[10px] text-slate-500">
-              {buildings.length} of {buildings.length} matching current filters
+              {buildings.length} persisted observations
             </span>
           </div>
         </div>

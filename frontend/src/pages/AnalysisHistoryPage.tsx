@@ -1,9 +1,30 @@
 import { CalendarClock } from "lucide-react";
 
 import StatusBadge from "../components/StatusBadge";
-import { analysisHistory } from "../data/mockData";
+import { useDashboard } from "../context/DashboardContext";
 
 export default function AnalysisHistoryPage() {
+  const { metrics, views, observations } = useDashboard();
+  const analysisHistory = metrics.map((metric) => {
+    const viewId = String(metric.view_id ?? "view");
+    const view = views.find((item) => item.view_id === viewId);
+    const viewObservations = observations.filter((item) => item.source_view_id === viewId);
+    const confidence = viewObservations.length
+      ? Math.round(viewObservations.reduce((sum, item) => sum + Number(item.confidence ?? 0), 0) / viewObservations.length * 100)
+      : 0;
+    return {
+      id: viewId,
+      location: String(view?.street_id ?? "Simulated study area"),
+      date: String(metric.timestamp ?? ""),
+      buildings: Number(metric.buildings_detected ?? 0),
+      assets: Number(metric.streetlights_detected ?? 0) + Number(metric.electric_poles_detected ?? 0),
+      status: "Completed" as const,
+      confidence,
+    };
+  });
+  const averageConfidence = analysisHistory.length
+    ? Math.round(analysisHistory.reduce((sum, run) => sum + run.confidence, 0) / analysisHistory.length)
+    : 0;
   return (
     <div>
       <div className="mb-5">
@@ -24,7 +45,7 @@ export default function AnalysisHistoryPage() {
         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Avg. Confidence</div>
           <p className="m-0 mt-2 text-2xl font-extrabold text-white">
-            {Math.round(analysisHistory.reduce((sum, r) => sum + r.confidence, 0) / analysisHistory.length)}%
+            {averageConfidence}%
           </p>
         </div>
         <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">

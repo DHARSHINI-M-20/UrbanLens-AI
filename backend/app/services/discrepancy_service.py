@@ -83,12 +83,19 @@ def detect_discrepancies(
                 and reference.get("coverage_status") == "complete"
                 for reference in references
             )
+            complete_simulated_reference = any(
+                str(reference.get("source_type") or "").lower() == "simulated_demo"
+                and reference.get("coverage_status") == "simulated_complete"
+                for reference in references
+            )
             if complete_internal_reference:
                 add_discrepancy("missing_reference_record", observation=observation, confidence=confidence,
                                 description="No corresponding record was found in the declared complete internal reference dataset.")
             else:
                 add_discrepancy("unmatched_reference_coverage_limited", observation=observation, confidence=confidence,
-                                description="No matching record was found in available references; public reference coverage is incomplete and absence is not evidence.")
+                                description=("No matching record was found in the simulated register; this is a demo-only discrepancy, not evidence of real-world absence."
+                                             if complete_simulated_reference else
+                                             "No matching record was found in available references; public reference coverage is incomplete and absence is not evidence."))
         matching_reference = next((item for item in references if str(item.get("reference_id") or item.get("_id")) == str(match.get("matched_reference_id"))), None)
         if matching_reference:
             mismatch_map = {
@@ -105,16 +112,19 @@ def detect_discrepancies(
                                     confidence=confidence,
                                     description=f"Observed {attribute} differs from the reference record.")
 
-    matched_reference_ids = {
-        str(match_reference_record(
+    matched_reference_ids: set[str] = set()
+    for observation in observations:
+        reference_match = match_reference_record(
             observed_asset_type=str(observation.get("asset_type") or "other"),
             observed_name=(observation.get("attributes") or {}).get("building_name") or (observation.get("attributes") or {}).get("business_name"),
             latitude=observation.get("latitude"),
             longitude=observation.get("longitude"),
             references=references,
-        ).get("matched_reference_id"))
-        for observation in observations
-    }
+        )
+        if reference_match["match_status"] in {"matched", "possible_match", "mismatch"}:
+            reference_id = reference_match.get("matched_reference_id")
+            if reference_id is not None:
+                matched_reference_ids.add(str(reference_id))
     for reference in references:
         reference_id = reference.get("reference_id") or reference.get("_id")
         if reference_id is not None and str(reference_id) in matched_reference_ids:
@@ -124,7 +134,11 @@ def detect_discrepancies(
             str(reference.get("source_type") or "").lower() in {"farmwiseai", "farmwise_internal", "internal"}
             and reference.get("coverage_status") == "complete"
         )
-        if record_type in {"streetlight", "electric_pole"} and complete_internal_reference:
+        complete_simulated_reference = (
+            str(reference.get("source_type") or "").lower() == "simulated_demo"
+            and reference.get("coverage_status") == "simulated_complete"
+        )
+        if record_type in {"streetlight", "electric_pole"} and (complete_internal_reference or complete_simulated_reference):
             observed = any(
                 str(item.get("asset_type") or "").lower() == record_type
                 and (distance := _distance_meters(reference, item)) is not None
@@ -135,7 +149,7 @@ def detect_discrepancies(
                 add_discrepancy(f"expected_{record_type}_not_observed", reference=reference,
                                 confidence=reference.get("confidence"),
                                 description=f"Reference expects a {record_type.replace('_', ' ')} with no nearby observation.")
-        elif complete_internal_reference:
+        elif complete_internal_reference or complete_simulated_reference:
             add_discrepancy("reference_without_observation", reference=reference,
                             confidence=reference.get("confidence"),
                             description="Reference property or asset has no corresponding observation.")

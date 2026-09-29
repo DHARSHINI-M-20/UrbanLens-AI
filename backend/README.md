@@ -20,7 +20,8 @@ This backend supports the FarmwiseAI Street View urban-asset and property-intell
    - Supports explicit source typing: `farmwise_provided`, `permitted_public`, `participant_generated`
 
 4. Street View abstraction
-   - Uses a provider contract for future authorized Google Street View access only
+   - Uses an injectable metadata provider contract; the deterministic demo provider uses the same contract
+   - Google access remains a separate future authorized adapter
    - Keeps the backend free of prohibited scraping or unofficial imagery access
 
 5. Detection / OCR / routing
@@ -108,7 +109,7 @@ The backend does not hard-code credentials. If Bedrock access is not configured,
 ```powershell
 cd C:\Users\dhars\UrbanLens-AI\backend
 .\.venv\Scripts\Activate.ps1
-uvicorn app.main:app --reload --app-dir backend
+uvicorn app.main:app --reload
 ```
 
 Health check:
@@ -122,6 +123,43 @@ Open the Swagger UI at:
 ```text
 http://127.0.0.1:8000/docs
 ```
+
+## Simulated Task 5 demonstration
+
+The demo is stored under the fixed dataset ID `urbanlens-task5-sim-v1`. Every record is marked `simulation: true` and carries the label `SIMULATED DEMONSTRATION DATA — NOT REAL STREET VIEW DATA`. The provider generates metadata only; generated synthetic PNGs are processed in memory by deterministic fixture providers. This is not Google imagery, a real YOLO/Tesseract accuracy result, a Nova response, FarmwiseAI reference data, or a positioning-accuracy validation.
+
+After starting the API and configuring a reachable MongoDB, seed/replay the isolated demo dataset:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/demo/seed
+```
+
+Check status and counts:
+
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8000/demo/status
+```
+
+Replay the existing simulated views:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/demo/process
+```
+
+Reset only this dataset (never other/user records):
+
+```powershell
+Invoke-RestMethod -Method Delete -Uri http://127.0.0.1:8000/demo/reset
+```
+
+In another terminal, run the frontend with the Vite `/api` proxy to the backend:
+
+```powershell
+cd C:\Users\dhars\UrbanLens-AI\frontend
+npm run dev
+```
+
+Open the URL printed by Vite. The persistent banner identifies simulation mode; the map uses a local CSS grid and does not request online map tiles. The UI can seed/reseed, process, reset, filter by street, inspect evidence, and persist review decisions.
 
 ## Data-source distinctions
 
@@ -211,11 +249,10 @@ Run the focused validation suite:
 
 ```powershell
 cd C:\Users\dhars\UrbanLens-AI\backend
-$env:PYTHONPATH = "$PWD\.venv\Lib\site-packages"
-.\.venv\Scripts\python.exe -m pytest tests/test_member2_pipeline.py -q
+.\run_tests.ps1 -q
 ```
 
-The suite covers study-area containment, road validation, routing, geospatial association, fusion, matching, discrepancy handling, review queue creation, and metrics tracking.
+The runner temporarily places the project venv's `site-packages` ahead of the base interpreter so an unrelated user-level `py.py` cannot shadow pytest's `py.path`; it restores the caller's `PYTHONPATH` afterward. The suite covers the complete offline pipeline plus a dataset-isolated MongoDB persistence/API integration test. Real Google and Bedrock tests remain opt-in and do not run during ordinary tests.
 
 Tests use deterministic model-output fixtures; they do not download detector weights, call Overpass, access Street View, or invoke AWS. A separate local end-to-end test uses generated image pixels, a stubbed YOLO-World output, and the installed local Tesseract executable.
 

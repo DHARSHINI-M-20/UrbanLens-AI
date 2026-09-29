@@ -22,6 +22,7 @@ COLLECTIONS = (
     "study_areas", "streets", "panoramas", "views", "observations", "unified_entities",
     "reference_records", "matches", "discrepancies", "review_queue", "sampling_points",
     "processing_runs", "processing_metrics", "ocr_observations", "reference_ingestion_runs",
+    "demo_datasets",
 )
 
 _client: MongoClient | None = None
@@ -75,6 +76,7 @@ def create_indexes() -> None:
     database["observations"].create_index([("panorama_id", ASCENDING)])
     database["review_queue"].create_index([("status", ASCENDING), ("created_at", ASCENDING)])
     database["processing_runs"].create_index([("status", ASCENDING), ("started_at", ASCENDING)])
+    database["demo_datasets"].create_index([("dataset_id", ASCENDING)], unique=True)
 
 
 def check_connection(create_schema: bool = False) -> bool:

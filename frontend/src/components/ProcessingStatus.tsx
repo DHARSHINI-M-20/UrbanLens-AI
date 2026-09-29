@@ -1,4 +1,5 @@
 import { CheckCircle2, Cpu, Database, ScanLine } from "lucide-react";
+import { useDashboard } from "../context/DashboardContext";
 
 const steps = [
   { icon: ScanLine, title: "Street View", subtitle: "Imagery collected", state: "done" as const },
@@ -7,6 +8,9 @@ const steps = [
 ];
 
 export default function ProcessingStatus() {
+  const { summary, seeded } = useDashboard();
+  const metrics = (summary?.processing_metrics ?? {}) as Record<string, unknown>;
+  const costMessage = summary?.processing_cost_message ?? "Cost unavailable - pricing not configured";
   return (
     <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-5">
       <div className="flex items-center justify-between">
@@ -16,7 +20,7 @@ export default function ProcessingStatus() {
         </div>
         <div className="flex items-center gap-1.5 rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-extrabold text-emerald-400">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          LIVE
+          {seeded ? "DEMO" : "IDLE"}
         </div>
       </div>
 
@@ -50,6 +54,16 @@ export default function ProcessingStatus() {
             </div>
           );
         })}
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-white/8 pt-4 text-[11px]">
+        <span className="text-slate-500">Views processed</span><strong className="text-slate-200">{String(metrics.total_views ?? 0)}</strong>
+        <span className="text-slate-500">Average latency</span><strong className="text-slate-200">{String(metrics.average_latency_ms ?? 0)} ms</strong>
+        <span className="text-slate-500">Detector / OCR</span><strong className="text-slate-200">{String(metrics.detector_latency_ms ?? 0)} / {String(metrics.ocr_latency_ms ?? 0)} ms</strong>
+        <span className="text-slate-500">Positioning</span><strong className="text-slate-200">{String(metrics.positioning_latency_ms ?? 0)} ms</strong>
+        <span className="text-slate-500">Actual invocations</span><strong className="text-slate-200">{String(metrics.actual_invocation_count ?? 0)}</strong>
+        <span className="text-slate-500">Simulated fixture calls</span><strong className="text-amber-200">{String(metrics.simulated_fixture_invocation_count ?? 0)}</strong>
+        <span className="text-slate-500">Mock escalations</span><strong className="text-cyan-300">{String(metrics.simulated_escalation_invocations ?? 0)}</strong>
+        <span className="col-span-2 text-slate-500">{metrics.cost_status === "available" ? `Estimated cost: ${String(metrics.estimated_total_cost)}` : String(costMessage)}</span>
       </div>
     </div>
   );
