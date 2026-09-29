@@ -1,0 +1,14 @@
+﻿Evaluation Metrics - UrbanLens AI OCR
+
+Test Images: 5
+Average OCR Confidence: 53.05%
+Average Text Similarity: 41.70%
+Exact Text Matches: 1/5
+Exact Text Match Rate: 20.00%
+OCR Accepted: 1/5
+VLM Escalated: 4/5
+
+Note:
+These results are from an initial 5-image evaluation dataset.
+The routing threshold is currently a test threshold and requires
+further evaluation before being treated as a final threshold.

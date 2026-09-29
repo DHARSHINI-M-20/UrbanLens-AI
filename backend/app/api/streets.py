@@ -16,6 +16,7 @@ router = APIRouter()
 class RoadImportInput(BaseModel):
     geojson: dict[str, Any]
     source: str = Field(min_length=1, max_length=200)
+    source_type: str = Field(default="participant_generated", pattern="^(farmwise_provided|permitted_public|participant_generated)$")
 
 
 def _public(document: dict[str, Any]) -> dict[str, Any]:
@@ -38,7 +39,7 @@ def list_streets() -> list[dict[str, Any]]:
 def import_streets(payload: RoadImportInput) -> dict[str, Any]:
     """Import a challenge-provided or manually supplied GeoJSON road dataset."""
     try:
-        documents, summary = prepare_streets(payload.geojson, payload.source)
+        documents, summary = prepare_streets(payload.geojson, payload.source, source_type=payload.source_type)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:

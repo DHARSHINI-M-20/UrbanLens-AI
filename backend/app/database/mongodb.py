@@ -19,9 +19,9 @@ from pymongo.errors import CollectionInvalid, PyMongoError
 from app.config import get_settings
 
 COLLECTIONS = (
-    "study_areas", "streets", "panoramas", "observations", "unified_entities",
+    "study_areas", "streets", "panoramas", "views", "observations", "unified_entities",
     "reference_records", "matches", "discrepancies", "review_queue", "sampling_points",
-    "processing_runs",
+    "processing_runs", "processing_metrics", "ocr_observations", "reference_ingestion_runs",
 )
 
 _client: MongoClient | None = None
@@ -62,14 +62,16 @@ def create_indexes() -> None:
             except CollectionInvalid:
                 # Another API worker may have created the collection first.
                 pass
-    for name in ("panoramas", "observations", "unified_entities", "reference_records", "sampling_points"):
+    for name in ("panoramas", "views", "observations", "unified_entities", "reference_records", "sampling_points"):
         database[name].create_index([("location", GEOSPHERE)], name="location_2dsphere")
+    database["reference_records"].create_index([("geometry", GEOSPHERE)], name="reference_geometry_2dsphere")
     for name in ("study_areas", "streets"):
         database[name].create_index([("geometry", GEOSPHERE)], name="geometry_2dsphere")
     database["study_areas"].create_index([("is_current", ASCENDING)], unique=True, sparse=True)
     database["streets"].create_index([("street_id", ASCENDING)], unique=True, sparse=True)
     database["sampling_points"].create_index([("sample_id", ASCENDING)], unique=True, sparse=True)
     database["panoramas"].create_index([("panorama_id", ASCENDING)], unique=True, sparse=True)
+    database["ocr_observations"].create_index([("ocr_id", ASCENDING)], unique=True, sparse=True)
     database["observations"].create_index([("panorama_id", ASCENDING)])
     database["review_queue"].create_index([("status", ASCENDING), ("created_at", ASCENDING)])
     database["processing_runs"].create_index([("status", ASCENDING), ("started_at", ASCENDING)])
@@ -106,7 +108,7 @@ def geojson_point(latitude: float, longitude: float) -> dict[str, Any]:
 def with_location(document: Mapping[str, Any]) -> dict[str, Any]:
     """Add MongoDB GeoJSON location when latitude and longitude are supplied."""
     data = dict(document)
-    if "latitude" in data and "longitude" in data:
+    if data.get("latitude") is not None and data.get("longitude") is not None:
         data["location"] = geojson_point(float(data["latitude"]), float(data["longitude"]))
     return data
 

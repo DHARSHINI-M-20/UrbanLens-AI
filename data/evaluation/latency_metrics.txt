@@ -1,0 +1,16 @@
+﻿UrbanLens AI - OCR Latency Evaluation
+
+Test Images: 5
+
+Image 1: 669.46 ms
+Image 2: 285.43 ms
+Image 3: 820.34 ms
+Image 4: 2970.77 ms
+Image 5: 407.86 ms
+
+Average OCR Processing Time: 1030.77 ms
+
+Note:
+These measurements represent OCR processing time only.
+VLM processing time and API cost are not included because
+the current VLM escalation module is an interface/stub.

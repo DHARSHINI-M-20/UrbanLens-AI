@@ -6,12 +6,16 @@ from app.api import (
     analytics,
     discrepancies,
     matching,
+    metrics,
     observations,
     panoramas,
+    queries,
+    references,
     review,
     sampling,
     study_area,
     streets,
+    views,
 )
 from app.config import get_settings
 from app.database.mongodb import check_connection
@@ -47,8 +51,13 @@ app.include_router(study_area.router, prefix="/study-area", tags=["study-area"])
 app.include_router(sampling.router, prefix="/sampling", tags=["sampling"])
 app.include_router(streets.router, prefix="/streets", tags=["streets"])
 app.include_router(panoramas.router, prefix="/panoramas", tags=["panoramas"])
+app.include_router(views.router, prefix="/views", tags=["views"])
 app.include_router(observations.router, prefix="/observations", tags=["observations"])
+app.include_router(references.router, prefix="/references", tags=["references"])
 app.include_router(matching.router, prefix="/matching", tags=["matching"])
 app.include_router(discrepancies.router, prefix="/discrepancies", tags=["discrepancies"])
-app.include_router(review.router, prefix="/review", tags=["review"])
+app.include_router(review.router, prefix="/reviews", tags=["reviews"])
+app.include_router(review.router, prefix="/review", tags=["review"])  # backward-compatible alias
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(queries.router, prefix="/queries", tags=["queries"])
+app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
