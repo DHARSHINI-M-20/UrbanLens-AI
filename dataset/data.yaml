@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['building', 'electric_pole', 'streetlight']
+
+roboflow:
+  workspace: naganandhini-kv
+  project: urbanlens-cv
+  version: 1
+  license: Private
+  url: https://app.roboflow.com/naganandhini-kv/urbanlens-cv/1
