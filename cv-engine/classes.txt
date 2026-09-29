@@ -1,0 +1,3 @@
+building
+electric_pole
+streetlight
