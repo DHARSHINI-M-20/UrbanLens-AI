@@ -61,12 +61,21 @@ def _road_name(properties: dict[str, Any], fallback_number: int) -> str | None:
     return None
 
 
-def prepare_streets(geojson: dict[str, Any], source: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def prepare_streets(
+    geojson: dict[str, Any],
+    source: str,
+    *,
+    source_type: str = "participant_generated",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Filter/clip supplied roads to the official boundary and prepare MongoDB documents."""
+    if not isinstance(geojson, dict):
+        raise ValueError("Road GeoJSON must be a dictionary.")
+
     roads, source_crs = _road_frame(geojson)
     study_area: BaseGeometry = shape(get_study_area_geometry())
     documents: list[dict[str, Any]] = []
     rejected = 0
+    source_type = source_type if source_type in {"farmwise_provided", "permitted_public", "participant_generated"} else "participant_generated"
 
     for index, row in roads.iterrows():
         geometry = row.geometry
@@ -88,6 +97,8 @@ def prepare_streets(geojson: dict[str, Any], source: str) -> tuple[list[dict[str
             "geometry": clipped.__geo_interface__,
             "study_area_id": STUDY_AREA_ID,
             "source": source,
+            "source_type": source_type,
+            "created_at": __import__("datetime").datetime.utcnow().isoformat(),
             "status": "ready",
             "attributes": properties,
         })
@@ -98,4 +109,5 @@ def prepare_streets(geojson: dict[str, Any], source: str) -> tuple[list[dict[str
         "roads_rejected": rejected,
         "crs": source_crs,
         "source": source,
+        "source_type": source_type,
     }
