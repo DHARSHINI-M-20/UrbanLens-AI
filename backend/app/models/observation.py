@@ -1,6 +1,6 @@
 """Shared Pydantic schemas for Street View-derived urban observations."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -95,4 +95,4 @@ class Observation(BaseModel):
     estimated_cost: float | None = Field(default=None, ge=0)
     evidence_reference: str | None = None
     review_status: ReviewStatus = ReviewStatus.PENDING
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

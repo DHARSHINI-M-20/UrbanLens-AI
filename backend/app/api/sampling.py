@@ -43,7 +43,7 @@ def generate_samples(payload: SamplingRequest) -> dict[str, int | float | str]:
 
 
 @router.get("/points")
-def list_sampling_points(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_sampling_points(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     """List currently stored sample coordinates for the official study area."""
     try:
         query = {"study_area_id": STUDY_AREA_ID}
@@ -55,10 +55,13 @@ def list_sampling_points(dataset_id: str | None = Query(default=None)) -> list[d
 
 
 @router.delete("/points")
-def delete_sampling_points() -> dict[str, int]:
-    """Remove generated sample points; this does not alter the official boundary."""
+def delete_sampling_points(dataset_id: str = Query(pattern="^[A-Za-z0-9_:-]{1,128}$"),
+                           confirm: bool = Query(default=False)) -> dict[str, int]:
+    """Remove only one explicitly selected dataset's generated sample points."""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to delete sample points for this dataset.")
     try:
-        result = get_collection("sampling_points").delete_many({"study_area_id": STUDY_AREA_ID})
+        result = get_collection("sampling_points").delete_many({"study_area_id": STUDY_AREA_ID, "dataset_id": dataset_id})
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return {"deleted_points": result.deleted_count}

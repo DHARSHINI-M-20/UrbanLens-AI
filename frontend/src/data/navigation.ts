@@ -2,6 +2,7 @@ import {
   BarChart3,
   Building2,
   FileSearch,
+  ListChecks,
   LayoutDashboard,
   Map,
   Settings,
@@ -22,6 +23,7 @@ export const NAV_MAIN: NavItem[] = [
   { id: "properties", label: "Properties", icon: Building2, path: "/properties" },
   { id: "analytics", label: "Analytics", icon: BarChart3, path: "/analytics" },
   { id: "history", label: "Analysis History", icon: FileSearch, path: "/history" },
+  { id: "queries", label: "Task 5 Queries", icon: ListChecks, path: "/challenge-queries" },
 ];
 
 export const NAV_MANAGEMENT: NavItem[] = [

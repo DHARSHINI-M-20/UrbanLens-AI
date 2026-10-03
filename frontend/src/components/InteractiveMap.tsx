@@ -14,6 +14,7 @@ import L from "leaflet";
 import { Building2, Lightbulb, Zap } from "lucide-react";
 
 import type { Asset, Building, Status } from "../types";
+import { hasCoordinates, nullableCoordinate } from "../utils/recordValues";
 
 import MapLegend from "./MapLegend";
 import MapControls from "./MapControls";
@@ -35,15 +36,15 @@ interface InteractiveMapProps {
   onBuildingSelect?: (building: Building) => void;
 }
 
-const mapCenter: [number, number] = [11.032, 76.98];
+function hasUsableLocation<T extends { latitude: number | null; longitude: number | null }>(
+  record: T,
+): record is T & { latitude: number; longitude: number } {
+  return hasCoordinates(record.latitude, record.longitude);
+}
 
-function validCoordinate(lat: unknown, lng: unknown): lat is number {
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    Math.abs(Number(lat)) <= 90 &&
-    Math.abs(Number(lng)) <= 180
-  );
+function validCoordinate(latitude: unknown, longitude: unknown): latitude is number {
+  return typeof latitude === "number" && typeof longitude === "number"
+    && hasCoordinates(latitude, longitude);
 }
 
 const statusColors: Record<Status, string> = {
@@ -124,13 +125,13 @@ function BuildingPopup({ building }: { building: Building }) {
       <div className="popup-info">
         <div><span>Street</span><strong>{building.street}</strong></div>
         <div><span>Building Type</span><strong>{building.type}</strong></div>
-        <div><span>Floors</span><strong>{building.floors}</strong></div>
-        <div><span>Confidence</span><strong>{building.confidence}%</strong></div>
+        <div><span>Floors</span><strong>{building.floors == null ? (building.floorStatus === "unknown" ? "Unknown" : "Not detected") : building.floors}</strong></div>
+        <div><span>Confidence</span><strong>{building.confidence == null ? "Unavailable" : `${building.confidence}%`}</strong></div>
         <div><span>OCR</span><strong>{building.ocr || "No text detected"}</strong></div>
-        <div><span>Match Score</span><strong>{building.matchScore ? `${building.matchScore}%` : "Not matched"}</strong></div>
+        <div><span>Match Score</span><strong>{building.matchScore == null ? "Unavailable" : `${building.matchScore}%`}</strong></div>
       </div>
       <div className="popup-footer">
-        {building.latitude.toFixed(4)}, {building.longitude.toFixed(4)}
+        {hasUsableLocation(building) ? `${building.latitude.toFixed(4)}, ${building.longitude.toFixed(4)}` : "Location unavailable"}
       </div>
     </div>
   );
@@ -150,15 +151,38 @@ function AssetPopup({ asset }: { asset: Asset }) {
       <div className="popup-info">
         <div><span>Asset Type</span><strong>{asset.type}</strong></div>
         <div><span>Street</span><strong>{asset.street}</strong></div>
-        <div><span>Confidence</span><strong>{asset.confidence}%</strong></div>
+        <div><span>Confidence</span><strong>{asset.confidence == null ? "Unavailable" : `${asset.confidence}%`}</strong></div>
       </div>
     </div>
   );
 }
 
+function centerFromStudyArea(studyArea: GeoJSON.FeatureCollection | null): [number, number] | null {
+  const positions: number[][] = [];
+  const visit = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number") {
+      positions.push(value as number[]);
+      return;
+    }
+    value.forEach(visit);
+  };
+  studyArea?.features.forEach((feature) => {
+    if (!feature.geometry) return;
+    if (feature.geometry.type === "GeometryCollection") visit(feature.geometry.geometries);
+    else visit(feature.geometry.coordinates);
+  });
+  if (!positions.length) return null;
+  const longitudes = positions.map(([longitude]) => longitude);
+  const latitudes = positions.map(([, latitude]) => latitude);
+  return [(Math.min(...latitudes) + Math.max(...latitudes)) / 2,
+    (Math.min(...longitudes) + Math.max(...longitudes)) / 2];
+}
+
 export default function InteractiveMap({ buildings, streets, samplingPoints, studyArea, onBuildingSelect }: InteractiveMapProps) {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [tileStyle, setTileStyle] = useState<"standard" | "dark">("dark");
+  const mapCenter = centerFromStudyArea(studyArea);
   const buildingRecords = buildings.filter((record) => record.assetType === "building");
   const assetRecords = buildings.filter((record) => record.assetType && record.assetType !== "building");
 
@@ -168,7 +192,7 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
         <div>
           <div className="text-[10px] font-extrabold tracking-widest text-cyan-400">GEOSPATIAL INTELLIGENCE</div>
           <h3 className="m-0 mt-1 text-lg font-bold text-white">Interactive Street Intelligence</h3>
-          <p className="m-0 mt-1 text-xs text-slate-500">Explore detected buildings and street-level infrastructure.</p>
+          <p className="m-0 mt-1 text-xs text-slate-500">Explore persisted building and asset observations; seeded records are synthetic.</p>
         </div>
 
         <div className="flex flex-wrap gap-4">
@@ -184,7 +208,10 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
         </div>
       </div>
 
-      <div className={`relative h-[620px] overflow-hidden rounded-2xl ${tileStyle === "dark" ? "map-theme-dark" : "map-theme-standard"}`}>
+      {!mapCenter && <p role="status" className="mb-3 rounded-lg border border-amber-300/20 p-3 text-xs text-amber-100">Map unavailable: official study-area geometry is not loaded.</p>}
+      {buildings.some((record) => !hasCoordinates(record.latitude, record.longitude)) &&
+        <p className="mb-3 text-xs text-slate-400">Some observations have no usable location and are not shown as map markers.</p>}
+      {mapCenter && <div className={`relative h-[620px] overflow-hidden rounded-2xl ${tileStyle === "dark" ? "map-theme-dark" : "map-theme-standard"}`}>
         <SafeMapContainer
           center={mapCenter}
           zoom={15}
@@ -207,9 +234,9 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
               style={{ color: "#fbbf24", weight: 4, opacity: 0.9 }} />;
           })}
           {samplingPoints.map((sample) => {
-            const latitude = Number(sample.latitude);
-            const longitude = Number(sample.longitude);
-            if (!validCoordinate(latitude, longitude)) return null;
+            const latitude = nullableCoordinate(sample.latitude, 90);
+            const longitude = nullableCoordinate(sample.longitude, 180);
+            if (latitude === null || longitude === null || !validCoordinate(latitude, longitude)) return null;
             return <CircleMarker key={String(sample.sample_id)} center={[latitude, longitude]} radius={3}
               pathOptions={{ color: "#f8fafc", fillColor: "#38bdf8", fillOpacity: 0.8 }}>
               <Popup>Simulated sampling point · {String(sample.status ?? "pending")}</Popup>
@@ -217,7 +244,7 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
           })}
 
           {buildingRecords
-            .filter((b) => validCoordinate(b.latitude, b.longitude))
+            .filter(hasUsableLocation)
             .map((building) => (
               <SafeMarker
                 key={building.id}
@@ -235,7 +262,7 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
             ))}
 
           {assetRecords
-            .filter((a) => validCoordinate(a.latitude, a.longitude))
+            .filter(hasUsableLocation)
             .map((record) => ({
               id: record.id,
               type: record.assetType === "electric_pole" ? "Electric Pole" : record.assetType === "streetlight" ? "Streetlight" : record.assetType ?? "Asset",
@@ -269,13 +296,13 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
         <div className="absolute bottom-4 left-4 z-[400] flex items-center gap-2.5 rounded-xl border border-white/10 bg-[#0f172a]/90 px-3.5 py-2.5 backdrop-blur-md">
           <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
           <div>
-            <strong className="block text-[11px] font-bold text-white">Live Intelligence Layer</strong>
+          <strong className="block text-[11px] font-bold text-white">Persisted Demo Observations</strong>
             <span className="block text-[10px] text-slate-500">
               {buildings.length} persisted observations
             </span>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

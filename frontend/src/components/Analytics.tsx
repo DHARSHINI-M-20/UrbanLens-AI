@@ -15,10 +15,13 @@ type ChartRow = { name: string; value: number };
 
 function rows(value: unknown): ChartRow[] {
   if (!value || typeof value !== "object") return [];
-  return Object.entries(value as Record<string, unknown>).map(([rawName, count]) => ({
-    name: ({ small_model: "Small model", vlm_escalation: "Nova Lite (real)", simulated_escalation: "Simulated Nova mock" } as Record<string, string>)[rawName] ?? rawName,
-    value: Number(count ?? 0),
-  }));
+  return Object.entries(value as Record<string, unknown>).flatMap(([rawName, count]) => {
+    if (count == null || (typeof count !== "number" && typeof count !== "string") || String(count).trim() === "") return [];
+    const numeric = Number(count);
+    if (!Number.isFinite(numeric) || numeric < 0) return [];
+    return [{ name: ({ small_model: "Small model", vlm_escalation: "VLM escalation route", simulated_escalation: "Simulated Nova mock" } as Record<string, string>)[rawName] ?? rawName,
+      value: numeric }];
+  });
 }
 
 function ChartCard({ title, children }: { title: string; children: ReactNode }) {
@@ -63,8 +66,10 @@ function PiePanel({ title, data }: { title: string; data: ChartRow[] }) {
 
 export default function Analytics() {
   const { summary, observations } = useDashboard();
-  const lowConfidence = observations.filter((item) => Number(item.confidence ?? 0) < 0.7).length;
-  const otherConfidence = observations.length - lowConfidence;
+  const knownConfidence = observations.filter((item) => typeof item.confidence === "number");
+  const lowConfidence = knownConfidence.filter((item) => Number(item.confidence) < 0.7).length;
+  const otherConfidence = knownConfidence.length - lowConfidence;
+  const unknownConfidence = observations.length - knownConfidence.length;
 
   return (
     <div>
@@ -76,7 +81,8 @@ export default function Analytics() {
         <PiePanel title="Match Status" data={rows(summary?.match_status_distribution)} />
         <BarPanel title="Discrepancies by Street" data={rows(summary?.discrepancies_by_street)} color="#fb7185" />
         <PiePanel title="Confidence Review Threshold" data={[
-          { name: "Low confidence", value: lowConfidence }, { name: "Other observations", value: otherConfidence },
+          { name: "Below threshold", value: lowConfidence }, { name: "At/above threshold", value: otherConfidence },
+          { name: "Confidence unavailable", value: unknownConfidence },
         ]} />
         <PiePanel title="Processing Route" data={rows(summary?.processing_route_distribution)} />
       </div>

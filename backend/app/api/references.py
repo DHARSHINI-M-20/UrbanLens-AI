@@ -31,12 +31,12 @@ class ReferenceImportInput(BaseModel):
 
 
 @router.get("")
-def list_references(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_references(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     try:
         query = {"study_area_id": STUDY_AREA_ID}
         if dataset_id:
             query["dataset_id"] = dataset_id
-        items = list(get_collection("reference_records").find(query))
+        items = list(get_collection("reference_records").find(query).limit(5000))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]

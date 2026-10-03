@@ -6,9 +6,10 @@ interface KPICardProps {
   icon: LucideIcon;
   description: string;
   accent: string;
+  badge?: string;
 }
 
-export default function KPICard({ title, value, icon: Icon, description, accent }: KPICardProps) {
+export default function KPICard({ title, value, icon: Icon, description, accent, badge = "API" }: KPICardProps) {
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-5 transition hover:border-white/15 hover:-translate-y-0.5">
       <div
@@ -22,8 +23,8 @@ export default function KPICard({ title, value, icon: Icon, description, accent 
         >
           <Icon size={18} />
         </div>
-        <span className="rounded-md bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider text-emerald-400">
-          LIVE
+        <span className="rounded-md bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider text-amber-200">
+          {badge}
         </span>
       </div>
 

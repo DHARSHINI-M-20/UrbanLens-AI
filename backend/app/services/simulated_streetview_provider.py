@@ -11,17 +11,18 @@ from shapely.geometry import Point, shape
 from app.services.study_area_service import get_study_area_geometry
 from app.services.streetview_service import StreetViewProviderError
 
-SIMULATION_LABEL = "SIMULATED DEMONSTRATION DATA — NOT REAL STREET VIEW DATA"
+SIMULATION_LABEL = "SIMULATED TAMIL NADU URBAN DATA — NOT REAL STREET VIEW DATA"
+SIMULATION_SOURCE = "SIMULATED_TAMIL_NADU_DATA"
 
 
 class SimulatedStreetViewProvider:
     """Implements the existing provider contract without network access."""
 
     name = "simulated"
-    source_name = SIMULATION_LABEL
+    source_name = SIMULATION_SOURCE
     is_simulated = True
 
-    def __init__(self, *, dataset_id: str = "urbanlens-task5-sim-v1") -> None:
+    def __init__(self, *, dataset_id: str = "tn_study_area_demo_v1") -> None:
         self.dataset_id = dataset_id
         self._panoramas = self._build_panorama_metadata()
 

@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "dataset_id": "urbanlens_synthetic_eval_v1",
+    "version": "1.0.0",
+    "synthetic": true,
+    "purpose": "Exercise evaluation schema and metric calculations with explicit labels and imperfect fixture predictions.",
+    "limitations": [
+      "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA",
+      "No Street View images are included; image and panorama identifiers are synthetic metadata.",
+      "Fixture predictions are deterministic mock-provider outputs, not measurements of a trained model.",
+      "The fixture is too small and synthetic to support real-world performance claims."
+    ],
+    "exhaustive_classes": ["building", "streetlight", "electric_pole", "traffic_sign"]
+  },
+  "samples": [
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-01", "panorama_id": "eval-pano-01", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [{"building_id": "eval-building-01", "presence": true, "bounding_box": {"x": 10, "y": 10, "width": 30, "height": 40}, "floor_count": 3, "building_use": "commercial", "latitude": 11.0321, "longitude": 76.9741}],
+      "assets": [{"asset_id": "eval-light-01", "asset_type": "streetlight", "presence": true, "bounding_box": {"x": 70, "y": 20, "width": 8, "height": 35}}, {"asset_id": "eval-pole-01", "asset_type": "electric_pole", "presence": true, "bounding_box": {"x": 90, "y": 15, "width": 7, "height": 45}}],
+      "ocr": [{"region_id": "eval-text-01", "ground_truth_text": "PARK VIEW", "text_region": {"x": 14, "y": 12, "width": 20, "height": 5}}],
+      "positioning": [{"entity_id": "eval-building-01", "latitude": 11.0321, "longitude": 76.9741}],
+      "reference_matches": [{"entity_id": "eval-building-01", "reference_id": "eval-ref-01", "matched": true}],
+      "discrepancies": [{"entity_id": "eval-building-01", "discrepancy_type": "missing_reference_record", "expected_present": false}],
+      "review_routing": [{"entity_id": "eval-building-01", "review_required": false, "expected_route": "local"}]
+    },
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-02", "panorama_id": "eval-pano-02", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [{"building_id": "eval-building-02", "presence": true, "bounding_box": {"x": 20, "y": 10, "width": 28, "height": 42}, "floor_count": 2, "building_use": "residential", "latitude": 11.0322, "longitude": 76.9742, "matched": false, "discrepancy_types": ["missing_reference_record"], "review_required": true, "expected_route": "vlm"}],
+      "assets": [], "ocr": [{"region_id": "eval-text-02", "ground_truth_text": "PHARMACY"}],
+      "positioning": [{"entity_id": "eval-building-02", "latitude": 11.0322, "longitude": 76.9742}],
+      "reference_matches": [{"entity_id": "eval-building-02", "matched": false}],
+      "discrepancies": [{"entity_id": "eval-building-02", "discrepancy_type": "unmatched_reference_coverage_limited", "expected_present": true}],
+      "review_routing": [{"entity_id": "eval-building-02", "review_required": true, "expected_route": "vlm"}]
+    },
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-03", "panorama_id": "eval-pano-03", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [], "assets": [], "ocr": [{"region_id": "eval-text-03", "ground_truth_text": ""}], "positioning": [], "reference_matches": [], "discrepancies": [], "review_routing": []
+    },
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-04", "panorama_id": "eval-pano-04", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [{"building_id": "eval-building-04", "presence": true, "bounding_box": {"x": 5, "y": 12, "width": 25, "height": 38}, "floor_count": null, "building_use": null, "review_required": true, "expected_route": "vlm"}],
+      "assets": [{"asset_id": "eval-sign-04", "asset_type": "traffic_sign", "presence": true}], "ocr": [{"region_id": "eval-text-04", "ground_truth_text": null}],
+      "positioning": [{"entity_id": "eval-building-04", "latitude": null, "longitude": null}], "reference_matches": [{"entity_id": "eval-building-04", "matched": null}], "discrepancies": [{"entity_id": "eval-building-04", "discrepancy_type": "floor_count_mismatch", "expected_present": null}], "review_routing": [{"entity_id": "eval-building-04", "review_required": true, "expected_route": "vlm"}]
+    },
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-05a", "panorama_id": "eval-pano-05a", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [{"building_id": "eval-building-05", "presence": true, "bounding_box": {"x": 40, "y": 8, "width": 35, "height": 50}, "floor_count": 5, "building_use": "mixed_use", "latitude": 11.0325, "longitude": 76.9745, "matched": true, "reference_id": "eval-ref-05", "review_required": false, "expected_route": "local"}],
+      "assets": [{"asset_id": "eval-sign-05", "asset_type": "traffic_sign", "presence": true, "bounding_box": {"x": 82, "y": 15, "width": 10, "height": 12}}], "ocr": [{"region_id": "eval-text-05", "ground_truth_text": "MARKET ROAD"}],
+      "positioning": [{"entity_id": "eval-building-05", "latitude": 11.0325, "longitude": 76.9745}], "reference_matches": [{"entity_id": "eval-building-05", "reference_id": "eval-ref-05", "matched": true}], "discrepancies": [{"entity_id": "eval-building-05", "discrepancy_type": "building_use_mismatch", "expected_present": false}], "review_routing": [{"entity_id": "eval-building-05", "review_required": false, "expected_route": "local"}]
+    },
+    {
+      "dataset_id": "urbanlens_synthetic_eval_v1", "image_id": "eval-view-05b", "panorama_id": "eval-pano-05b", "source": "synthetic_fixture", "provenance": "SYNTHETIC EVALUATION GROUND TRUTH — NOT REAL STREET VIEW DATA", "labeled_classes": ["building", "streetlight", "electric_pole", "traffic_sign"],
+      "buildings": [{"building_id": "eval-building-05", "presence": true, "bounding_box": {"x": 42, "y": 9, "width": 34, "height": 49}, "floor_count": 5, "building_use": "mixed_use", "latitude": 11.0325, "longitude": 76.9745, "matched": true, "reference_id": "eval-ref-05", "review_required": false, "expected_route": "local"}],
+      "assets": [], "ocr": [{"region_id": "eval-text-05b", "ground_truth_text": "MARKET ROAD"}],
+      "positioning": [{"entity_id": "eval-building-05", "latitude": 11.0325, "longitude": 76.9745}], "reference_matches": [{"entity_id": "eval-building-05", "reference_id": "eval-ref-05", "matched": true}], "discrepancies": [{"entity_id": "eval-building-05", "discrepancy_type": "building_use_mismatch", "expected_present": false}], "review_routing": [{"entity_id": "eval-building-05", "review_required": false, "expected_route": "local"}]
+    }
+  ]
+}

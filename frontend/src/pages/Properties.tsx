@@ -23,7 +23,7 @@ export default function Properties() {
         <span className="text-[10px] font-bold tracking-widest text-cyan-400">DATA QUALITY</span>
         <h1 className="m-0 mt-1 text-2xl font-extrabold text-white">Property Discrepancies</h1>
         <p className="m-0 mt-1 text-[13px] text-slate-500">
-          Automated findings from detected properties vs. available property records.
+          Simulated observations compared with the reference records supplied to this dataset. “Unmatched” means no match in those records, not that no official property record exists.
         </p>
       </div>
 

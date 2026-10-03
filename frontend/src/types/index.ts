@@ -12,12 +12,7 @@ export type BuildingType =
   | "Mixed-use"
   | "Institutional";
 
-export type AssetType =
-  | "Building"
-  | "Streetlight"
-  | "Electric Pole"
-  | "Traffic Signal"
-  | "Road Sign";
+export type AssetType = string;
 
 export interface KPIData {
   title: string;
@@ -31,14 +26,15 @@ export interface KPIData {
 export interface Building {
   id: string;
   street: string;
-  latitude: number;
-  longitude: number;
-  type: BuildingType;
-  floors: number;
-  confidence: number;
+  latitude: number | null;
+  longitude: number | null;
+  type: BuildingType | string;
+  floors: number | null;
+  floorStatus?: "known" | "unknown" | "not_detected" | "unavailable";
+  confidence: number | null;
   ocr: string;
   matchedProperty: string;
-  matchScore: number;
+  matchScore: number | null;
   status: Status;
   buildingType?: BuildingType;
   processing?: string;
@@ -67,7 +63,7 @@ export interface ReviewItem {
   title: string;
   description: string;
   priority: "High" | "Medium" | "Low";
-  confidence: number;
+  confidence: number | null;
   buildingId?: string;
   detail?: string;
   reviewId?: string;
@@ -80,9 +76,9 @@ export interface Asset {
   id: string;
   type: AssetType;
   street: string;
-  latitude: number;
-  longitude: number;
-  confidence: number;
+  latitude: number | null;
+  longitude: number | null;
+  confidence: number | null;
   status: Status;
 }
 

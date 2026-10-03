@@ -1,11 +1,19 @@
 """FastAPI entry point for UrbanLens AI."""
 
-from fastapi import FastAPI, HTTPException
+import os
+from contextlib import asynccontextmanager
+from ipaddress import ip_address
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     analytics,
+    aws_integration,
     demo,
     discrepancies,
+    evaluation,
     matching,
     metrics,
     observations,
@@ -22,13 +30,40 @@ from app.config import get_settings
 from app.database.mongodb import check_connection
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="0.1.0")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Check optional MongoDB connectivity when the local API starts."""
+    application.state.mongodb_reachable = check_connection(create_schema=True)
+    yield
 
 
-@app.on_event("startup")
-def test_database_connection() -> None:
-    """Test MongoDB at API startup and prepare indexes when it is reachable."""
-    app.state.mongodb_reachable = check_connection(create_schema=True)
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+cors_origins = [origin.strip() for origin in os.getenv("URBANLENS_CORS_ORIGINS", "").split(",") if origin.strip()]
+if "*" in cors_origins:
+    raise RuntimeError("URBANLENS_CORS_ORIGINS must list explicit origins; wildcard CORS is not allowed.")
+app.add_middleware(CORSMiddleware, allow_origins=cors_origins,
+                   allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type"], allow_credentials=False)
+
+
+@app.middleware("http")
+async def enforce_local_mutation_and_body_limits(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > 25_000_000:
+                return JSONResponse(status_code=413, content={"detail": "Request body exceeds the 25 MB limit."})
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header."})
+    if os.getenv("URBANLENS_ENVIRONMENT", "development").lower() == "production" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        host = request.client.host if request.client else ""
+        try:
+            trusted_local = ip_address(host).is_loopback
+        except ValueError:
+            trusted_local = False
+        if not trusted_local:
+            return JSONResponse(status_code=403, content={"detail": "Mutation endpoints are restricted to the local development host."})
+    return await call_next(request)
 
 
 @app.get("/health", tags=["health"])
@@ -57,9 +92,11 @@ app.include_router(observations.router, prefix="/observations", tags=["observati
 app.include_router(references.router, prefix="/references", tags=["references"])
 app.include_router(matching.router, prefix="/matching", tags=["matching"])
 app.include_router(discrepancies.router, prefix="/discrepancies", tags=["discrepancies"])
+app.include_router(evaluation.router, prefix="/evaluation", tags=["evaluation"])
 app.include_router(review.router, prefix="/reviews", tags=["reviews"])
 app.include_router(review.router, prefix="/review", tags=["review"])  # backward-compatible alias
 app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(aws_integration.router, prefix="/aws", tags=["aws"])
 app.include_router(demo.router, prefix="/demo", tags=["demo"])
 app.include_router(queries.router, prefix="/queries", tags=["queries"])
 app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])

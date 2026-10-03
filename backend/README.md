@@ -126,12 +126,12 @@ http://127.0.0.1:8000/docs
 
 ## Simulated Task 5 demonstration
 
-The demo is stored under the fixed dataset ID `urbanlens-task5-sim-v1`. Every record is marked `simulation: true` and carries the label `SIMULATED DEMONSTRATION DATA — NOT REAL STREET VIEW DATA`. The provider generates metadata only; generated synthetic PNGs are processed in memory by deterministic fixture providers. This is not Google imagery, a real YOLO/Tesseract accuracy result, a Nova response, FarmwiseAI reference data, or a positioning-accuracy validation.
+The demo is stored under the fixed dataset ID `tn_study_area_demo_v1`. Every record is marked `simulation: true` and carries the label `SIMULATED TAMIL NADU URBAN DATA — NOT REAL STREET VIEW DATA`. The provider generates metadata only; generated synthetic PNGs are processed in memory by deterministic fixture providers. This is not Google imagery, a real YOLO/Tesseract accuracy result, a Nova response, FarmwiseAI reference data, or a positioning-accuracy validation.
 
 After starting the API and configuring a reachable MongoDB, seed/replay the isolated demo dataset:
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/demo/seed
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/demo/seed?confirm=true'
 ```
 
 Check status and counts:
@@ -149,7 +149,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/demo/process
 Reset only this dataset (never other/user records):
 
 ```powershell
-Invoke-RestMethod -Method Delete -Uri http://127.0.0.1:8000/demo/reset
+Invoke-RestMethod -Method Delete -Uri 'http://127.0.0.1:8000/demo/reset?confirm=true'
 ```
 
 In another terminal, run the frontend with the Vite `/api` proxy to the backend:
@@ -197,7 +197,7 @@ The Street View abstraction supports an authorized provider later, and only stor
 ### Sampling
 - `POST /sampling/generate`
 - `GET /sampling/points`
-- `DELETE /sampling/points`
+- `DELETE /sampling/points?dataset_id=<id>&confirm=true` (dataset-scoped)
 
 ### Streets
 - `POST /streets/import`
@@ -231,17 +231,27 @@ The Street View abstraction supports an authorized provider later, and only stor
 - `POST /discrepancies/generate`
 
 ### Queries
-- `GET /queries/commercial-buildings-without-match`
+- `GET /queries/buildings-over-2-floors-without-match`
 - `GET /queries/streets-without-streetlights`
 - `GET /queries/low-confidence-floor-counts`
-- `GET /queries/unmatched-buildings-assets`
+- `GET /queries/unmatched-buildings-by-street`
+- `GET /queries/routed-vs-all-vlm`
+- Legacy aliases: `/queries/commercial-buildings-without-match`, `/queries/unmatched-buildings-assets`
 - `GET /queries/observations-by-street/{street_id}`
 - `GET /queries/observations-by-asset-type/{asset_type}`
 - `GET /queries/review-queue`
 
+Challenge-query responses use a shared envelope with dataset/simulation provenance, count, timestamp, records, and limitations. The all-VLM result is a hypothetical estimate; no all-VLM baseline or quality comparison is claimed. Missing streetlight findings are emitted only for records whose source declares complete coverage.
+
 ### Metrics
 - `GET /metrics`
 - `GET /metrics/summary`
+
+### Ground-truth evaluation
+- `POST /evaluation/run` runs the registered, versioned synthetic fixture only.
+- See [docs/evaluation.md](docs/evaluation.md) for the schema, metric definitions, exclusion rules, CLI, API request, and limitations.
+- Fixture results are always labelled `SYNTHETIC EVALUATION RESULT — NOT REAL STREET VIEW PERFORMANCE`; they are not real-world accuracy measurements.
+- No all-VLM baseline has been executed. Real Street View evaluation requires an authorized image source and appropriate labelled ground truth.
 
 ## Testing
 
@@ -253,6 +263,8 @@ cd C:\Users\dhars\UrbanLens-AI\backend
 ```
 
 The runner temporarily places the project venv's `site-packages` ahead of the base interpreter so an unrelated user-level `py.py` cannot shadow pytest's `py.path`; it restores the caller's `PYTHONPATH` afterward. The suite covers the complete offline pipeline plus a dataset-isolated MongoDB persistence/API integration test. Real Google and Bedrock tests remain opt-in and do not run during ordinary tests.
+
+Set `URBANLENS_ENVIRONMENT=production` to restrict FastAPI mutation endpoints to loopback clients. Set `URBANLENS_CORS_ORIGINS` to an explicit comma-separated origin allowlist when cross-origin access is needed; wildcard origins are rejected. The default same-origin Vite proxy requires no CORS allowlist. Image request payloads are bounded, and the processing endpoint separately validates encoded and decoded image sizes.
 
 Tests use deterministic model-output fixtures; they do not download detector weights, call Overpass, access Street View, or invoke AWS. A separate local end-to-end test uses generated image pixels, a stubbed YOLO-World output, and the installed local Tesseract executable.
 

@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Eye } from "lucide-react";
 
 import type { Building } from "../types";
 import StatusBadge from "./StatusBadge";
+import PaginationControls from "./PaginationControls";
+import { paginate } from "../utils/pagination";
 
 interface Props {
   buildings: Building[];
@@ -11,6 +14,9 @@ interface Props {
 const columns = ["ID", "Street", "Location", "Entity", "Floors / use", "OCR", "Match", "Position", "Confidence", "Discrepancy / review", "Route / source", ""];
 
 export default function DiscrepancyTable({ buildings, onSelect }: Props) {
+  const pageSize = 25;
+  const [page, setPage] = useState(1);
+  const current = paginate(buildings, page, pageSize);
   return (
     <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03]">
       <div className="flex flex-col justify-between gap-3 border-b border-white/8 p-5 sm:flex-row sm:items-center">
@@ -41,7 +47,7 @@ export default function DiscrepancyTable({ buildings, onSelect }: Props) {
                 </td>
               </tr>
             )}
-            {buildings.map((building) => (
+            {current.items.map((building) => (
               <tr
                 key={building.id}
                 onClick={() => onSelect(building)}
@@ -49,18 +55,20 @@ export default function DiscrepancyTable({ buildings, onSelect }: Props) {
               >
                 <td className="px-5 py-4 text-sm font-bold text-white">{building.id}</td>
                 <td className="px-5 py-4 text-sm text-slate-300">{building.street}</td>
-                <td className="px-5 py-4 text-xs text-slate-400">{building.latitude.toFixed(5)}, {building.longitude.toFixed(5)}</td>
+                <td className="px-5 py-4 text-xs text-slate-400">{building.latitude == null || building.longitude == null
+                  ? "Location unavailable" : `${building.latitude.toFixed(5)}, ${building.longitude.toFixed(5)}`}</td>
                 <td className="px-5 py-4 text-sm text-slate-300">{building.assetType}</td>
-                <td className="px-5 py-4 text-xs text-slate-300">{building.floors || "?"} · {String(building.attributes?.building_use ?? "unknown")}</td>
+                <td className="px-5 py-4 text-xs text-slate-300">{building.floors == null ? (building.floorStatus === "unknown" ? "Unknown" : "Not detected") : building.floors} · {String(building.attributes?.building_use ?? "unknown")}</td>
                 <td className="max-w-[160px] truncate px-5 py-4 text-sm text-slate-400">{building.ocr}</td>
                 <td className="px-5 py-4 text-sm font-semibold text-slate-200">{building.matchedProperty}</td>
                 <td className="px-5 py-4 text-xs text-slate-400">{building.positionConfidence == null ? "Unvalidated" : `${Math.round(building.positionConfidence * 100)}%`}</td>
-                <td className="px-5 py-4 text-sm font-bold text-white">{building.confidence}%</td>
+                <td className="px-5 py-4 text-sm font-bold text-white">{building.confidence == null ? "Unavailable" : `${building.confidence}%`}</td>
                 <td className="max-w-[220px] px-5 py-4 text-xs text-slate-400">{building.discrepancy || building.reviewStatus}</td>
                 <td className="px-5 py-4 text-xs text-slate-400">{building.modelRoute} · {building.provenance}</td>
                 <td className="px-5 py-4">
                   <StatusBadge status={building.status} />
                   <button
+                    aria-label={`View evidence for ${building.id}`}
                     onClick={(e) => { e.stopPropagation(); onSelect(building); }}
                     className="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-cyan-400"
                   >
@@ -72,6 +80,7 @@ export default function DiscrepancyTable({ buildings, onSelect }: Props) {
           </tbody>
         </table>
       </div>
+      <PaginationControls page={current.page} pageCount={current.pageCount} total={current.total} pageSize={pageSize} onPageChange={setPage} />
     </div>
   );
 }

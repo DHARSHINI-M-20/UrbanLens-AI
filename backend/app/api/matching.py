@@ -37,8 +37,11 @@ def run_matching(payload: MatchRequest | None = None) -> dict[str, Any]:
 		query: dict[str, Any] = {"study_area_id": STUDY_AREA_ID}
 		if payload.observation_ids:
 			query["observation_id"] = {"$in": payload.observation_ids}
-		observations = list(get_collection("observations").find(query))
-		references = list(get_collection("reference_records").find({"study_area_id": STUDY_AREA_ID}))
+		observations = list(get_collection("observations").find(query).limit(5000))
+		reference_query = {"study_area_id": STUDY_AREA_ID}
+		if "dataset_id" in query:
+			reference_query["dataset_id"] = query["dataset_id"]
+		references = list(get_collection("reference_records").find(reference_query).limit(5000))
 		source_groups: dict[str, list[dict[str, Any]]] = {}
 		for reference in references:
 			source = str(reference.get("reference_source") or reference.get("source_type") or reference.get("source") or "unspecified")
@@ -64,7 +67,7 @@ def run_matching(payload: MatchRequest | None = None) -> dict[str, Any]:
 
 
 @router.get("")
-def list_matches(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_matches(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
 	try:
 		query = {"study_area_id": STUDY_AREA_ID}
 		if dataset_id:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -86,12 +87,12 @@ def _building_identity(observation: dict[str, Any]) -> str | None:
 
 
 @router.get("")
-def list_observations(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_observations(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     try:
         query = {"study_area_id": STUDY_AREA_ID}
         if dataset_id:
             query["dataset_id"] = dataset_id
-        items = list(get_collection("observations").find(query))
+        items = list(get_collection("observations").find(query).limit(5000))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]
@@ -103,7 +104,7 @@ def create_observation(payload: ObservationInput) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail="Observation is outside the official study area.")
     document = payload.model_dump(mode="python")
     document["study_area_id"] = STUDY_AREA_ID
-    document.setdefault("created_at", __import__("datetime").datetime.utcnow().isoformat())
+    document.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     try:
         get_collection("observations").replace_one({"observation_id": payload.observation_id}, document, upsert=True)
     except PyMongoError as exc:
@@ -112,7 +113,7 @@ def create_observation(payload: ObservationInput) -> dict[str, Any]:
 
 
 @router.get("/ocr")
-def list_ocr_observations(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_ocr_observations(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     try:
         query = {"study_area_id": STUDY_AREA_ID}
         if dataset_id:
@@ -128,6 +129,10 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
     """Process one selected view and persist outputs without storing image bytes."""
     if getattr(_pipeline.vision_provider, "name", None) == "unconfigured":
         raise HTTPException(status_code=503, detail="No vision detector is configured for observation processing.")
+    supplied_dataset_id = payload.image_context.get("dataset_id")
+    if supplied_dataset_id is not None and (not isinstance(supplied_dataset_id, str)
+            or not re.fullmatch(r"[A-Za-z0-9_:-]{1,128}", supplied_dataset_id)):
+        raise HTTPException(status_code=422, detail="image_context.dataset_id has an invalid format.")
     try:
         import base64
         import time
@@ -162,7 +167,7 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
         reference_query = {"study_area_id": STUDY_AREA_ID}
         if dataset_id:
             reference_query["dataset_id"] = dataset_id
-        references = list(get_collection("reference_records").find(reference_query))
+        references = list(get_collection("reference_records").find(reference_query).limit(5000))
         grouped_references: dict[str, list[dict[str, Any]]] = {}
         for reference in references:
             source = str(reference.get("reference_source") or reference.get("source_type") or reference.get("source") or "unspecified")
@@ -181,7 +186,7 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
             observation["simulation"] = bool(context.get("simulation"))
             observation["provenance"] = context.get("provenance")
             if context.get("simulation"):
-                observation["source"] = "SIMULATED_DEMONSTRATION"
+                observation["source"] = "SIMULATED_TAMIL_NADU_DATA"
             observation["positioning"] = None
             match = match_observation(observation, reference_adapter)
             match.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
@@ -263,7 +268,7 @@ def process_selected_view(payload: ProcessViewInput) -> dict[str, Any]:
         for ocr_result in result["ocr_results"]:
             ocr_result.update({"study_area_id": STUDY_AREA_ID, "created_at": now,
                                "dataset_id": dataset_id, "simulation": bool(context.get("simulation")),
-                               "source": "SIMULATED_DEMONSTRATION" if context.get("simulation") else ocr_result.get("source")})
+                               "source": "SIMULATED_TAMIL_NADU_DATA" if context.get("simulation") else ocr_result.get("source")})
             get_collection("ocr_observations").replace_one({"ocr_id": ocr_result["ocr_id"]}, ocr_result, upsert=True)
 
         discrepancies = detect_discrepancies(observations=observations, references=references)

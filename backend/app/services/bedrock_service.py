@@ -15,6 +15,12 @@ from botocore.exceptions import ClientError, NoCredentialsError, PartialCredenti
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import get_settings
+from app.services.bedrock_runtime import (
+    invoke_image,
+    invoke_text,
+    make_bedrock_runtime_client,
+    normalize_single_result,
+)
 
 
 class NovaLiteStructuredResponse(BaseModel):
@@ -50,12 +56,7 @@ class BedrockService:
 
     def _make_client(self):
         try:
-            import boto3  # type: ignore
-        except ModuleNotFoundError as exc:
-            raise RuntimeError("boto3 is not installed. Add it to backend requirements to enable Bedrock access.") from exc
-
-        try:
-            self.client = boto3.client("bedrock-runtime", region_name=self.region)
+            self.client = make_bedrock_runtime_client(region=self.region, profile=get_settings().aws_profile)
             return self.client
         except (NoCredentialsError, PartialCredentialsError) as exc:
             raise RuntimeError("AWS credentials are not available through the standard provider chain.") from exc
@@ -98,7 +99,7 @@ class BedrockService:
         if "{" not in cleaned:
             raise ValidationError("Nova Lite response did not contain a JSON object.")
         parsed = json.loads(cleaned[cleaned.find("{") : cleaned.rfind("}") + 1])
-        return NovaLiteStructuredResponse.model_validate(parsed)
+        return NovaLiteStructuredResponse.model_validate(normalize_single_result(parsed))
 
     def invoke_nova_lite(
         self,
@@ -114,31 +115,15 @@ class BedrockService:
         try:
             if image_bytes is not None:
                 image_format = self._image_format(image_bytes)
-                response = client.converse(
-                    modelId=target_model,
-                    messages=[{
-                        "role": "user",
-                        "content": [
-                            {"text": prompt},
-                            {"image": {"format": image_format, "source": {"bytes": image_bytes}}},
-                        ],
-                    }],
-                    inferenceConfig={"maxTokens": 512, "temperature": 0.2},
+                data, _ = invoke_image(
+                    client,
+                    model_id=target_model,
+                    prompt=prompt,
+                    image_bytes=image_bytes,
+                    image_format=image_format,
                 )
-                data = response
             else:
-                payload = {
-                    "modelId": target_model,
-                    "contentType": "application/json",
-                    "accept": "application/json",
-                    "body": json.dumps({
-                        "messages": [{"role": "user", "content": [{"text": prompt}]}],
-                        "inferenceConfig": {"maxTokens": 512, "temperature": 0.2},
-                    }).encode("utf-8"),
-                }
-                response = client.invoke_model(**payload)
-                body = response.get("body").read()
-                data = json.loads(body)
+                data, _ = invoke_text(client, model_id=target_model, prompt=prompt)
             latency_ms = round((time.perf_counter() - started) * 1000, 2)
             return BedrockInvocationResult(
                 status="ok",

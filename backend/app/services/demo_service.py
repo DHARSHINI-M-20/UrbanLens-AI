@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime, timezone
 from collections.abc import Mapping, Sequence
 from io import BytesIO
 from typing import Any
+from uuid import uuid4
 
 from PIL import Image, ImageDraw
 from shapely.geometry import LineString, box, mapping, shape
@@ -24,9 +26,11 @@ from app.services.study_area_service import STUDY_AREA_ID, get_study_area_geojso
 from app.services.vision_service import MockVisionProvider
 from app.services.view_selection_service import select_useful_views
 
-DEMO_DATASET_ID = "urbanlens-task5-sim-v1"
-DEMO_SOURCE = "SIMULATED_DEMONSTRATION"
-REFERENCE_SOURCE = "SIMULATED_REFERENCE_REGISTER"
+DEMO_DATASET_ID = "tn_study_area_demo_v1"
+LEGACY_DEMO_DATASET_ID = "urbanlens-task5-sim-v1"
+DEMO_SOURCE = "SIMULATED_TAMIL_NADU_DATA"
+REFERENCE_SOURCE = "SIMULATED_PROPERTY_REGISTER"
+DATASET_ID_ALIASES = (DEMO_DATASET_ID, LEGACY_DEMO_DATASET_ID)
 
 BASE_COLLECTIONS = (
     "study_areas", "streets", "sampling_points", "panoramas", "views", "reference_records",
@@ -175,15 +179,19 @@ class SimulatedNovaLiteService:
 
 
 def _scoped_delete(collection: str) -> None:
-    get_collection(collection).delete_many({"dataset_id": DEMO_DATASET_ID})
+    for dataset_id in DATASET_ID_ALIASES:
+        get_collection(collection).delete_many({"dataset_id": dataset_id})
 
 
 def reset_demo_dataset() -> dict[str, Any]:
-    """Delete only records owned by this fixed demo dataset identifier."""
+    """Delete only records owned by the active demo dataset and the legacy compatibility ID."""
     deleted: dict[str, int] = {}
     for name in ALL_DEMO_COLLECTIONS:
-        result = get_collection(name).delete_many({"dataset_id": DEMO_DATASET_ID})
-        deleted[name] = result.deleted_count
+        total_deleted = 0
+        for dataset_id in DATASET_ID_ALIASES:
+            result = get_collection(name).delete_many({"dataset_id": dataset_id})
+            total_deleted += result.deleted_count
+        deleted[name] = total_deleted
     return {"dataset_id": DEMO_DATASET_ID, "deleted_by_collection": deleted}
 
 
@@ -404,6 +412,8 @@ def run_demo_dataset() -> dict[str, Any]:
     dataset = get_collection("demo_datasets").find_one({"dataset_id": DEMO_DATASET_ID})
     if dataset is None:
         raise ValueError("Simulated dataset is not seeded; call POST /demo/seed first.")
+    run_id = f"demo_run_{uuid4().hex}"
+    started_at = datetime.now(timezone.utc).isoformat()
     for name in OUTPUT_COLLECTIONS:
         _scoped_delete(name)
 
@@ -435,7 +445,7 @@ def run_demo_dataset() -> dict[str, Any]:
         {"dataset_id": DEMO_DATASET_ID},
         {"$set": {"status": "processed", "processed_views": len(results)}},
     )
-    return {
+    result = {
         "dataset_id": DEMO_DATASET_ID,
         "label": SIMULATION_LABEL,
         "processed_views": len(results),
@@ -447,6 +457,16 @@ def run_demo_dataset() -> dict[str, Any]:
         "routing": [item["routing"]["model_route"] for item in results],
         "simulation": True,
     }
+    get_collection("processing_runs").insert_one({
+        "run_id": run_id, "dataset_id": DEMO_DATASET_ID, "study_area_id": STUDY_AREA_ID,
+        "status": "simulated", "simulation": True, "started_at": started_at,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "processed_views": result["processed_views"], "observations": result["observations"],
+        "ocr_observations": result["ocr_observations"], "matches": result["matches"],
+        "discrepancies": result["discrepancies"], "review_queue_entries": result["review_queue_entries"],
+        "provenance": SIMULATION_LABEL,
+    })
+    return {**result, "run_id": run_id}
 
 
 def seed_demo_dataset() -> dict[str, Any]:

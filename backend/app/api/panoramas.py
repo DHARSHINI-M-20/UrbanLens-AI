@@ -70,7 +70,7 @@ def discover_panorama(payload: PanoramaDiscoveryInput) -> dict[str, Any]:
 
 
 @router.get("")
-def list_panoramas(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_panoramas(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
 	try:
 		query = {"study_area_id": STUDY_AREA_ID}
 		if dataset_id:

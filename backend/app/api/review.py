@@ -30,15 +30,17 @@ class ReviewDecisionInput(BaseModel):
     status: Literal["pending", "approved", "rejected", "needs_review"]
     reviewer: str = Field(min_length=1)
     reviewer_decision: str | None = None
+    corrected_attributes: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str | None = Field(default=None, max_length=2000)
 
 
 @router.get("")
-def list_reviews(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_reviews(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     try:
         query = {"study_area_id": STUDY_AREA_ID}
         if dataset_id:
             query["dataset_id"] = dataset_id
-        items = list(get_collection("review_queue").find(query))
+        items = list(get_collection("review_queue").find(query).sort("created_at", -1).limit(1000))
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc
     return [{k: v for k, v in item.items() if k != "_id"} for item in items]
@@ -48,7 +50,7 @@ def list_reviews(dataset_id: str | None = Query(default=None)) -> list[dict[str,
 def create_review(payload: ReviewInput) -> dict[str, Any]:
     document = payload.model_dump(mode="python")
     document.setdefault("study_area_id", STUDY_AREA_ID)
-    document.setdefault("created_at", __import__("datetime").datetime.utcnow().isoformat())
+    document.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     try:
         get_collection("review_queue").replace_one({"review_id": payload.review_id}, document, upsert=True)
     except PyMongoError as exc:
@@ -64,7 +66,9 @@ def record_review_decision(review_id: str, payload: ReviewDecisionInput) -> dict
         "reviewer": payload.reviewer.strip(),
         "reviewer_decision": payload.reviewer_decision,
         "reviewed_at": reviewed_at,
+        "reviewer_note": payload.reviewer_note,
     }
+    corrections: dict[str, dict[str, Any]] = {}
     if not updates["reviewer"]:
         raise HTTPException(status_code=422, detail="Reviewer identity is required.")
     try:
@@ -74,6 +78,22 @@ def record_review_decision(review_id: str, payload: ReviewDecisionInput) -> dict
         )
         if result.matched_count != 1:
             raise HTTPException(status_code=404, detail="Review queue entry not found.")
+        if payload.corrected_attributes:
+            review = collection.find_one({"review_id": review_id, "study_area_id": STUDY_AREA_ID}) or {}
+            observation = get_collection("observations").find_one({
+                "observation_id": review.get("observation_id"), "study_area_id": STUDY_AREA_ID,
+            }) or {}
+            attributes = observation.get("attributes") or {}
+            allowed = {"visible_floor_count", "building_use", "asset_type", "ocr_text"}
+            for key, corrected in payload.corrected_attributes.items():
+                if key not in allowed or corrected is None:
+                    continue
+                original = (observation.get("asset_type") if key == "asset_type" else
+                            observation.get("ocr_text") if key == "ocr_text" else attributes.get(key))
+                corrections[key] = {"original": original, "corrected": corrected}
+            if corrections:
+                collection.update_one({"review_id": review_id, "study_area_id": STUDY_AREA_ID},
+                                      {"$set": {"corrections": corrections}})
         item = collection.find_one({"review_id": review_id, "study_area_id": STUDY_AREA_ID})
     except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is not reachable.") from exc

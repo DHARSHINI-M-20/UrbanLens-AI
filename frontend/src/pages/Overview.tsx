@@ -25,8 +25,8 @@ export default function Overview() {
               City Intelligence Dashboard
             </h1>
             <p className="m-0 max-w-2xl text-[13px] leading-relaxed text-slate-400">
-              Monitor buildings, infrastructure assets, property matching and AI verification across the
-              selected study area.
+              Explore persisted observations and demonstration matching/review results inside the official
+              study-area boundary.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2.5">
@@ -83,10 +83,10 @@ export default function Overview() {
                     <strong className="text-[13px] font-bold text-white">{b.id}</strong>
                     <span className="truncate text-xs text-slate-500">{b.street}</span>
                   </div>
-                  <span className="text-[11px] text-slate-500">{b.buildingType ?? b.type} · {b.floors} floors</span>
+                  <span className="text-[11px] text-slate-500">{b.buildingType ?? b.type} · {b.floors == null ? (b.floorStatus === "unknown" ? "Unknown floors" : "Floor count not detected") : `${b.floors} floors`}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs font-bold text-slate-300">{b.confidence}%</span>
+                  <span className="text-xs font-bold text-slate-300">{b.confidence == null ? "Confidence unavailable" : `${b.confidence}%`}</span>
                   <StatusBadge status={b.status} />
                 </div>
               </div>
@@ -121,7 +121,7 @@ export default function Overview() {
               </div>
               <p className="m-0 mt-2 text-[13px] font-semibold leading-snug text-white">{item.title}</p>
               <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-500">
-                <TrendingUp size={12} /> {item.confidence}% confidence
+                <TrendingUp size={12} /> {item.confidence == null ? "Confidence not available" : `${item.confidence}% confidence`}
               </div>
             </div>
           ))}

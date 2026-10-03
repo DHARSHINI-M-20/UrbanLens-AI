@@ -1,6 +1,6 @@
 """Shared models for entity fusion, matching, review, and processing."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -16,7 +16,7 @@ class UnifiedEntity(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
     observation_ids: list[str] = Field(default_factory=list)
     review_status: ReviewStatus = ReviewStatus.PENDING
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class MatchResult(BaseModel):
@@ -26,7 +26,7 @@ class MatchResult(BaseModel):
     unified_entity_id: str | None = None
     confidence: float = Field(ge=0, le=1)
     match_method: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Discrepancy(BaseModel):
@@ -37,7 +37,7 @@ class Discrepancy(BaseModel):
     reference_value: Any | None = None
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus = ReviewStatus.PENDING
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ReviewItem(BaseModel):
@@ -46,7 +46,7 @@ class ReviewItem(BaseModel):
     observation_id: str | None = None
     status: ReviewStatus = ReviewStatus.PENDING
     reviewer_notes: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ProcessingRun(BaseModel):
@@ -56,5 +56,5 @@ class ProcessingRun(BaseModel):
     model_name: str | None = None
     input_reference: str | None = None
     metrics: dict[str, Any] = Field(default_factory=dict)
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None

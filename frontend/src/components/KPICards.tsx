@@ -11,10 +11,14 @@ import {
 
 import KPICard from "./KPICard";
 import { useDashboard } from "../context/DashboardContext";
+import { nullableNumber } from "../utils/recordValues";
 
 export default function KPICards() {
-  const { summary } = useDashboard();
-  const value = (key: string) => Number(summary?.[key] ?? 0).toLocaleString();
+  const { summary, seeded } = useDashboard();
+  const value = (key: string) => {
+    const numeric = nullableNumber(summary?.[key]);
+    return numeric == null ? "Unavailable" : numeric.toLocaleString();
+  };
   const cards = [
     { title: "Streets Covered", value: value("streets_covered"), icon: Map, description: "Simulated street segments", accent: "#38bdf8" },
     { title: "Buildings Analysed", value: value("buildings_analysed"), icon: Building2, description: "Persisted observations", accent: "#818cf8" },
@@ -29,7 +33,7 @@ export default function KPICards() {
   return (
     <section className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
-        <KPICard key={card.title} {...card} />
+        <KPICard key={card.title} {...card} badge={seeded ? "SIMULATED" : "NO DATA"} />
       ))}
     </section>
   );

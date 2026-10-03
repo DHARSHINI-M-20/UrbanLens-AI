@@ -55,3 +55,17 @@ def test_text_only_nova_call_keeps_existing_invoke_model_path(monkeypatch):
     assert result.model_id == "apac.amazon.nova-lite-v1:0"
     assert runtime.request["modelId"] == "apac.amazon.nova-lite-v1:0"
     assert "image" not in json.loads(runtime.request["body"])["messages"][0]["content"][0]
+
+
+def test_structured_parser_normalizes_parallel_synthetic_scene_arrays():
+    service = BedrockService(region="ap-south-1", inference_profile="apac.amazon.nova-lite-v1:0")
+    parsed = service.parse_structured_response({"text": json.dumps({
+        "building_use": ["retail", "residential"],
+        "visible_floor_count": ["multiple", "3"],
+        "confidence": ["high", "0.84"],
+        "reasoning_summary": ["synthetic scene result", "another building"],
+    })})
+    assert parsed.building_use == "retail"
+    assert parsed.visible_floor_count is None
+    assert parsed.confidence == 0.0
+    assert parsed.uncertainty_indicators == ["floor_count_not_numeric", "qualitative_confidence_not_numeric"]

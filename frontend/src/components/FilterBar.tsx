@@ -49,8 +49,9 @@ export default function FilterBar({
         <select value={confidence} onChange={(e) => setConfidence(e.target.value)} className={selectClass}>
           <option value="All">All Levels</option>
           <option value="High">High 80%+</option>
-          <option value="Medium">Medium 60–79%</option>
-          <option value="Low">Low &lt;60%</option>
+          <option value="Medium">Medium 70–79%</option>
+          <option value="Low">Low &lt;70%</option>
+          <option value="Unknown">Unavailable</option>
         </select>
       </div>
     </div>

@@ -10,6 +10,7 @@ import {
 
 import { useDashboard } from "../context/DashboardContext";
 import StatusBadge from "./StatusBadge";
+import { nullablePercent } from "../utils/recordValues";
 
 function InfoCard({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
@@ -67,15 +68,16 @@ export default function EvidenceDrawer() {
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <InfoCard icon={<Building2 size={14} />} label="Building Use" value={String(attributes.building_use ?? "Not classified")} />
               <InfoCard icon={<MapPin size={14} />} label="Street" value={building.street} />
-              <InfoCard icon={<Building2 size={14} />} label="Visible Floors" value={building.floors ? `${building.floors}` : "Not available"} />
-              <InfoCard icon={<Sparkles size={14} />} label="Confidence" value={`${building.confidence}%`} />
+              <InfoCard icon={<Building2 size={14} />} label="Visible Floors" value={building.floors == null ? (building.floorStatus === "unknown" ? "Unknown" : "Not detected") : `${building.floors}`} />
+              <InfoCard icon={<Sparkles size={14} />} label="Confidence" value={building.confidence == null ? "Unavailable" : `${building.confidence}%`} />
             </div>
 
             <div className="mt-2.5">
               <InfoCard
                 icon={<MapPin size={14} />}
                 label="Approximate observed location"
-                value={`${building.latitude.toFixed(4)}, ${building.longitude.toFixed(4)}`}
+                value={building.latitude == null || building.longitude == null
+                  ? "Location unavailable" : `${building.latitude.toFixed(4)}, ${building.longitude.toFixed(4)}`}
               />
             </div>
 
@@ -95,7 +97,7 @@ export default function EvidenceDrawer() {
                   <ScanText size={13} /> Detected Text
                 </div>
                 <p className="m-0 mt-2 text-base font-bold text-white">{String(ocrRecord?.normalized_text ?? building.ocr)}</p>
-                <p className="m-0 mt-2 text-[10px] text-slate-500">Raw: {String(ocrRecord?.raw_text ?? building.ocr)} · confidence: {ocrRecord?.confidence == null ? "n/a" : `${Math.round(Number(ocrRecord.confidence) * 100)}%`}</p>
+                <p className="m-0 mt-2 text-[10px] text-slate-500">Raw: {String(ocrRecord?.raw_text ?? building.ocr)} · confidence: {nullablePercent(ocrRecord?.confidence) == null ? "Not available" : `${nullablePercent(ocrRecord?.confidence)}%`}</p>
                 <p className="m-0 mt-1 text-[10px] text-slate-500">OCR source: {String(ocrRecord?.source ?? raw.source ?? "simulated fixture")}</p>
               </div>
             </div>
@@ -110,13 +112,13 @@ export default function EvidenceDrawer() {
                 <div className="mt-3">
                   <div className="mb-1.5 flex justify-between text-[10px]">
                     <span className="text-slate-500">Match Score</span>
-                    <span className="font-bold text-cyan-400">{building.matchScore}%</span>
+                    <span className="font-bold text-cyan-400">{building.matchScore == null ? "Unavailable" : `${building.matchScore}%`}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
+                    {building.matchScore != null && <div
                       className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-indigo-400"
                       style={{ width: `${building.matchScore}%` }}
-                    />
+                    />}
                   </div>
                 </div>
               </div>

@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --configLoader native",
     "lint": "eslint .",
+    "test:unit": "node tests/record-values.test.mjs",
+    "test:smoke": "node tests/ui-smoke.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

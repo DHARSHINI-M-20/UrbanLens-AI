@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -98,7 +99,7 @@ def prepare_streets(
             "study_area_id": STUDY_AREA_ID,
             "source": source,
             "source_type": source_type,
-            "created_at": __import__("datetime").datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "status": "ready",
             "attributes": properties,
         })

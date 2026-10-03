@@ -25,7 +25,7 @@ def _public(document: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.get("")
-def list_streets(dataset_id: str | None = Query(default=None)) -> list[dict[str, Any]]:
+def list_streets(dataset_id: str | None = Query(default=None, pattern="^[A-Za-z0-9_:-]{1,128}$")) -> list[dict[str, Any]]:
     """List imported roads that belong to the official challenge study area."""
     try:
         query = {"study_area_id": STUDY_AREA_ID}

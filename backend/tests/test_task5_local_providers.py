@@ -10,6 +10,7 @@ import asyncio
 import httpx
 
 from app.main import app
+from app.services.bedrock_service import BedrockInvocationResult
 from app.services.discrepancy_service import detect_discrepancies
 from app.config import get_settings
 from app.services.observation_fusion_service import fuse_nearby_observations
@@ -41,6 +42,16 @@ class FixtureYOLOWorldModel:
             conf=[0.96, 0.88, 0.91],
         )
         return [SimpleNamespace(names={0: "building", 1: "streetlight", 2: "electric pole"}, boxes=boxes)]
+
+
+class OfflineBedrockService:
+    def invoke_nova_lite(self, prompt, *, image_bytes=None):
+        return BedrockInvocationResult(
+            status="escalation_failed",
+            model_id="offline-test-stub",
+            error="AWS invocation disabled in this offline test.",
+            success=False,
+        )
 
 
 def _study_geojson():
@@ -252,6 +263,7 @@ def test_end_to_end_offline_local_vision_ocr_positioning_fusion_matching_review_
         pipeline = ObservationPipelineService(
             vision_provider=LocalYOLOWorldVisionProvider(model=model),
             ocr_provider=TesseractOCRProvider(),
+            bedrock_service=OfflineBedrockService(),
         )
         run = pipeline.process({
             "view_id": view_id,
