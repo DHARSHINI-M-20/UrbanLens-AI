@@ -29,13 +29,49 @@ foreach ($source in $sources) {
     }
 }
 
-$role = aws lambda get-function-configuration --profile $Profile --region $region --function-name $FunctionName --query "Role" --output text --no-cli-pager
+$currentConfiguration = aws lambda get-function-configuration --profile $Profile --region $region --function-name $FunctionName --query "{Runtime:Runtime,Role:Role,Environment:Environment.Variables}" --output json --no-cli-pager
 if ($LASTEXITCODE -ne 0) {
     throw "Existing Lambda was not found or cannot be inspected; refusing to create or replace it."
 }
-if (($role -split "/")[-1] -ne $expectedRoleName) {
+if (-not $currentConfiguration) {
+    throw "Existing Lambda configuration was empty; refusing to update it."
+}
+$parsedConfiguration = $currentConfiguration | ConvertFrom-Json
+$current = @{}
+$parsedConfiguration.PSObject.Properties | ForEach-Object {
+    $current[$_.Name] = $_.Value
+}
+if ($null -ne $current.Environment) {
+    $environment = @{}
+    $current.Environment.PSObject.Properties | ForEach-Object {
+        $environment[$_.Name] = $_.Value
+    }
+    $current.Environment = $environment
+}
+if (($current.Role -split "/")[-1] -ne $expectedRoleName) {
     throw "Existing Lambda uses a different execution role; refusing to update it."
 }
+if ($current.Runtime -ne "python3.12") {
+    throw "Existing Lambda does not use Python 3.12; refusing to update it."
+}
+$environment = $current.Environment
+if ($null -eq $environment) { $environment = @{} }
+$environment["URBANLENS_LAMBDA_BEDROCK_ENABLED"] = "true"
+$environment["BEDROCK_INFERENCE_PROFILE"] = "apac.amazon.nova-lite-v1:0"
+$environmentFile = Join-Path $env:TEMP ("urbanlens-lambda-environment-" + [guid]::NewGuid().ToString("N") + ".json")
+$environmentJson = ConvertTo-Json -InputObject @{ Variables = $environment } -Depth 20 -Compress
+[System.IO.File]::WriteAllText($environmentFile, $environmentJson, [System.Text.UTF8Encoding]::new($false))
+Write-Output ([pscustomobject]@{
+    FunctionName = $FunctionName
+    Region = $region
+    Runtime = $current.Runtime
+    ExecutionRole = ($current.Role -split "/")[-1]
+    PreservesExistingEnvironmentVariables = $true
+    AddsOrUpdates = @{
+        URBANLENS_LAMBDA_BEDROCK_ENABLED = "true"
+        BEDROCK_INFERENCE_PROFILE = "apac.amazon.nova-lite-v1:0"
+    }
+} | ConvertTo-Json -Depth 5)
 
 $zip = Join-Path $env:TEMP ("urbanlens-cloud-lambda-" + [guid]::NewGuid().ToString("N") + ".zip")
 $packageScript = @'
@@ -72,7 +108,28 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Could not verify the updated Lambda."
     }
+
+    aws lambda update-function-configuration --profile $Profile --region $region --function-name $FunctionName --environment "file://$environmentFile" --query "{FunctionName:FunctionName,LastModified:LastModified,State:State,LastUpdateStatus:LastUpdateStatus}" --output json --no-cli-pager
+    if ($LASTEXITCODE -ne 0) {
+        throw "Lambda code was updated, but enabling Bedrock configuration failed."
+    }
+    aws lambda wait function-updated-v2 --profile $Profile --region $region --function-name $FunctionName --no-cli-pager
+    if ($LASTEXITCODE -ne 0) {
+        throw "Lambda environment update waiter failed."
+    }
+    $verification = aws lambda get-function-configuration --profile $Profile --region $region --function-name $FunctionName --query "{FunctionName:FunctionName,Runtime:Runtime,Role:Role,State:State,LastUpdateStatus:LastUpdateStatus,BedrockEnabled:Environment.Variables.URBANLENS_LAMBDA_BEDROCK_ENABLED,InferenceProfile:Environment.Variables.BEDROCK_INFERENCE_PROFILE}" --output json --no-cli-pager
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not verify the Bedrock-enabled Lambda configuration."
+    }
+    $verified = $verification | ConvertFrom-Json
+    if ($verified.Role -notmatch "/$expectedRoleName$" -or $verified.Runtime -ne "python3.12" -or
+        $verified.BedrockEnabled -ne "true" -or $verified.InferenceProfile -ne "apac.amazon.nova-lite-v1:0" -or
+        $verified.State -ne "Active" -or $verified.LastUpdateStatus -ne "Successful") {
+        throw "Updated Lambda did not match the required role, runtime, or Bedrock configuration."
+    }
+    $verification
 }
 finally {
     Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $environmentFile -Force -ErrorAction SilentlyContinue
 }

@@ -6,6 +6,7 @@ import { useDashboard } from "../context/DashboardContext";
 export default function MapIntelligence() {
   const {
     filteredBuildings,
+    mapAssets,
     selectBuilding,
     search,
     setSearch,
@@ -60,7 +61,7 @@ export default function MapIntelligence() {
         </div>
       </div>
 
-      <InteractiveMap buildings={filteredBuildings} streets={selectedStreet === "All" ? streets : streets.filter((street) => street.street_id === selectedStreet)} samplingPoints={samplingPoints} studyArea={studyArea} onBuildingSelect={selectBuilding} />
+      <InteractiveMap buildings={filteredBuildings} assets={mapAssets} streets={selectedStreet === "All" ? streets : streets.filter((street) => street.street_id === selectedStreet)} samplingPoints={samplingPoints} studyArea={studyArea} onBuildingSelect={selectBuilding} />
     </div>
   );
 }

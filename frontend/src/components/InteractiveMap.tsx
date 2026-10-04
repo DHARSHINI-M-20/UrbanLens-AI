@@ -30,6 +30,7 @@ const SafeMarker = Marker as any;
 
 interface InteractiveMapProps {
   buildings: Building[];
+  assets: Building[];
   streets: Record<string, unknown>[];
   samplingPoints: Record<string, unknown>[];
   studyArea: GeoJSON.FeatureCollection | null;
@@ -179,12 +180,12 @@ function centerFromStudyArea(studyArea: GeoJSON.FeatureCollection | null): [numb
     (Math.min(...longitudes) + Math.max(...longitudes)) / 2];
 }
 
-export default function InteractiveMap({ buildings, streets, samplingPoints, studyArea, onBuildingSelect }: InteractiveMapProps) {
+export default function InteractiveMap({ buildings, assets, streets, samplingPoints, studyArea, onBuildingSelect }: InteractiveMapProps) {
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [tileStyle, setTileStyle] = useState<"standard" | "dark">("dark");
   const mapCenter = centerFromStudyArea(studyArea);
-  const buildingRecords = buildings.filter((record) => record.assetType === "building");
-  const assetRecords = buildings.filter((record) => record.assetType && record.assetType !== "building");
+  const buildingRecords = buildings;
+  const assetRecords = assets;
 
   return (
     <div className="rounded-3xl border border-white/8 bg-white/[0.03] p-5">
@@ -209,8 +210,12 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
       </div>
 
       {!mapCenter && <p role="status" className="mb-3 rounded-lg border border-amber-300/20 p-3 text-xs text-amber-100">Map unavailable: official study-area geometry is not loaded.</p>}
-      {buildings.some((record) => !hasCoordinates(record.latitude, record.longitude)) &&
+      {[...buildings, ...assets].some((record) => !hasCoordinates(record.latitude, record.longitude)) &&
         <p className="mb-3 text-xs text-slate-400">Some observations have no usable location and are not shown as map markers.</p>}
+      {buildings.length + assets.length > 0 && ![...buildings, ...assets].some((record) => hasCoordinates(record.latitude, record.longitude)) &&
+        <p role="status" className="mb-3 rounded-lg border border-amber-300/20 p-3 text-xs text-amber-100">No observations have valid API coordinates; the map shows the study area without observation markers.</p>}
+      {buildings.length + assets.length === 0 &&
+        <p role="status" className="mb-3 rounded-lg border border-white/10 p-3 text-xs text-slate-400">No observation records are available for this dataset.</p>}
       {mapCenter && <div className={`relative h-[620px] overflow-hidden rounded-2xl ${tileStyle === "dark" ? "map-theme-dark" : "map-theme-standard"}`}>
         <SafeMapContainer
           center={mapCenter}
@@ -298,7 +303,7 @@ export default function InteractiveMap({ buildings, streets, samplingPoints, stu
           <div>
           <strong className="block text-[11px] font-bold text-white">Persisted Demo Observations</strong>
             <span className="block text-[10px] text-slate-500">
-              {buildings.length} persisted observations
+              {buildings.length + assets.length} persisted observations
             </span>
           </div>
         </div>

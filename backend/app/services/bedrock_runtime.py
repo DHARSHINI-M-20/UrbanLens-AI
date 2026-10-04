@@ -12,15 +12,32 @@ from botocore.config import Config
 
 
 def normalize_single_result(payload: Any) -> dict[str, Any]:
-    """Normalize a single structured result from scalar or parallel-array model output."""
+    """Normalize Nova output while retaining every returned object and unknowns."""
     if isinstance(payload, list):
-        payload = next((item for item in payload if isinstance(item, dict)), {})
+        payload = {"objects": payload}
     if not isinstance(payload, dict):
         raise ValueError("Nova Lite structured result must be an object.")
 
     result = dict(payload)
-    uncertainty = list(result.get("uncertainty_indicators") or [])
-    for field in ("building_use", "visible_floor_count", "frontage", "condition", "building_name", "confidence", "reasoning_summary"):
+    uncertainty_value = result.get("uncertainty_indicators")
+    uncertainty = list(uncertainty_value) if isinstance(uncertainty_value, list) else []
+    fields = ("building_use", "visible_floor_count", "frontage", "condition", "building_name", "confidence", "reasoning_summary")
+    raw_objects = next((result.get(key) for key in ("objects", "buildings", "observations", "results")
+                        if isinstance(result.get(key), list)), None)
+    if raw_objects is None:
+        array_lengths = [len(result[field]) for field in fields if isinstance(result.get(field), list)]
+        if array_lengths:
+            count = max(array_lengths)
+            raw_objects = [{field: result[field][index] for field in fields
+                            if isinstance(result.get(field), list) and index < len(result[field])}
+                           for index in range(count)]
+    if isinstance(raw_objects, list):
+        result["objects"] = [_normalize_object(item) for item in raw_objects if isinstance(item, dict)]
+        for item in result["objects"]:
+            for indicator in item.get("uncertainty_indicators", []):
+                if indicator not in uncertainty:
+                    uncertainty.append(indicator)
+    for field in fields:
         value = result.get(field)
         if isinstance(value, list):
             value = value[0] if value else None
@@ -33,18 +50,48 @@ def normalize_single_result(payload: Any) -> dict[str, Any]:
         result["visible_floor_count"] = None
         uncertainty.append("floor_count_not_numeric")
 
-    confidence = result.get("confidence")
-    if isinstance(confidence, str):
-        try:
-            confidence = float(confidence)
-        except ValueError:
-            confidence = None
-    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
-        confidence = 0.0
-        uncertainty.append("qualitative_confidence_not_numeric")
-    result["confidence"] = max(0.0, min(1.0, float(confidence)))
-    result["uncertainty_indicators"] = uncertainty
+    result["confidence"] = _normalize_confidence(result.get("confidence"), uncertainty)
+    result["uncertainty_indicators"] = list(dict.fromkeys(uncertainty))
     return result
+
+
+def _normalize_confidence(value: Any, uncertainty: list[str]) -> float | None:
+    if isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            value = None
+            uncertainty.append("confidence_not_numeric")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        if value is not None:
+            uncertainty.append("confidence_not_numeric")
+        return None
+    confidence = float(value)
+    if not 0 <= confidence <= 1:
+        uncertainty.append("confidence_out_of_range")
+        return None
+    return confidence
+
+
+def _normalize_object(value: dict[str, Any]) -> dict[str, Any]:
+    item = dict(value)
+    uncertainty_value = item.get("uncertainty_indicators")
+    uncertainty = list(uncertainty_value) if isinstance(uncertainty_value, list) else []
+    for field in ("building_use", "visible_floor_count", "frontage", "condition", "building_name", "confidence", "reasoning_summary"):
+        field_value = item.get(field)
+        if isinstance(field_value, list):
+            field_value = field_value[0] if field_value else None
+        item[field] = field_value
+    floor_count = item.get("visible_floor_count")
+    if isinstance(floor_count, str) and re.fullmatch(r"\d+", floor_count.strip()):
+        item["visible_floor_count"] = int(floor_count)
+    elif floor_count is not None and (isinstance(floor_count, bool) or not isinstance(floor_count, int)):
+        item["visible_floor_count"] = None
+        uncertainty.append("floor_count_not_numeric")
+    item["confidence"] = _normalize_confidence(item.get("confidence"), uncertainty)
+    if uncertainty:
+        item["uncertainty_indicators"] = uncertainty
+    return item
 
 
 def make_bedrock_runtime_client(*, region: str, profile: str | None = None) -> Any:

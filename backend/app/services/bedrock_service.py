@@ -31,9 +31,12 @@ class NovaLiteStructuredResponse(BaseModel):
     frontage: str | None = None
     condition: str | None = None
     building_name: str | None = None
-    confidence: float = Field(default=0.0, ge=0, le=1)
+    object_id: str | None = None
+    building_id: str | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1)
     uncertainty_indicators: list[str] = Field(default_factory=list)
     reasoning_summary: str | None = None
+    objects: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class BedrockInvocationResult(BaseModel):

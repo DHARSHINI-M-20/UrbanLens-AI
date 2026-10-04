@@ -5,7 +5,7 @@ import { nullableCoordinate, nullableNumber, nullablePercent } from "../utils/re
 import type { Asset, Building, ReviewItem } from "../types";
 
 export const DEMO_DATASET_ID = "tn_study_area_demo_v1";
-export const DEMO_BANNER = "SYNTHETIC DEMONSTRATION DATA — NOT REAL STREET VIEW DATA\nGenerated within the official FarmwiseAI study-area boundary.\nGenerated observations and references are not an official property register.";
+export const DEMO_BANNER = "Source: SIMULATED_TAMIL_NADU_DATA. Observations and references are generated demonstration records, not an official property register.";
 
 type RecordData = Record<string, unknown>;
 
@@ -22,6 +22,7 @@ interface DashboardContextValue {
   studyAreaMetadata: Record<string, unknown> | null;
   streets: RecordData[];
   samplingPoints: RecordData[];
+  mapAssets: Building[];
   observations: RecordData[];
   ocr: RecordData[];
   references: RecordData[];
@@ -70,7 +71,7 @@ function mapObservation(record: RecordData, streetNames: Map<string, string>): B
   const status = matchStatus === "matched" ? "MATCHED" : matchStatus === "mismatch" ? "MISMATCH" :
     matchStatus === "possible_match" ? "PARTIAL" : confidence != null && confidence < 70 ? "LOW CONFIDENCE" :
       matchStatus === "unmatched" ? "UNMATCHED" : "NOT VERIFIED";
-  const rawType = asText(record.asset_type, "other");
+  const rawType = asText(record.asset_type ?? record.entity_type, "other");
   const use = asText(attributes.building_use, "unknown");
   const normalizedUse = use.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   const coordinates = positioning.latitude != null && positioning.longitude != null ? positioning : record;
@@ -135,6 +136,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [studyAreaMetadata, setStudyAreaMetadata] = useState<Record<string, unknown> | null>(null);
   const [streets, setStreets] = useState<RecordData[]>([]);
   const [samplingPoints, setSamplingPoints] = useState<RecordData[]>([]);
+  const [cloudBuildings, setCloudBuildings] = useState<Building[]>([]);
+  const [cloudAssets, setCloudAssets] = useState<Building[]>([]);
   const [observations, setObservations] = useState<RecordData[]>([]);
   const [ocr, setOcr] = useState<RecordData[]>([]);
   const [references, setReferences] = useState<RecordData[]>([]);
@@ -155,7 +158,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const [status, area, nextAwsStatus] = await Promise.all([
-        api.demoStatus(),
+        API_MODE === "aws" ? api.datasets() : api.demoStatus(),
         api.studyArea(),
         API_MODE === "aws" ? api.awsStatus() : Promise.resolve(null),
       ]);
@@ -166,6 +169,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       setSeeded(isSeeded);
       if (!isSeeded) {
         setSummary(null);
+        setCloudBuildings([]); setCloudAssets([]);
         setStreets([]); setSamplingPoints([]); setObservations([]); setOcr([]);
         setReferences([]); setDiscrepancyRecords([]); setReviews([]); setMetrics([]); setRuns([]);
         return;
@@ -177,6 +181,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         api.discrepancies(DEMO_DATASET_ID), api.reviews(DEMO_DATASET_ID),
         api.metrics(DEMO_DATASET_ID), api.analytics(DEMO_DATASET_ID), api.runs(DEMO_DATASET_ID),
       ]);
+      const [nextCloudBuildings, nextCloudAssets] = API_MODE === "aws"
+        ? await Promise.all([api.buildings(DEMO_DATASET_ID), api.assets(DEMO_DATASET_ID)])
+        : [[], []];
+      const names = new Map(nextStreets.map((street) => [asText(street.street_id), asText(street.name)]));
+      setCloudBuildings(nextCloudBuildings.map((record) => mapObservation(record, names)));
+      setCloudAssets(nextCloudAssets.map((record) => mapObservation(record, names)));
       setStreets(nextStreets); setSamplingPoints(nextSamples);
       setObservations(nextObservations); setOcr(nextOcr); setReferences(nextReferences);
       setDiscrepancyRecords(nextDiscrepancies);
@@ -221,8 +231,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   }
 
   const streetNames = new Map(streets.map((street) => [asText(street.street_id), asText(street.name)]));
-  const buildings = observations.map((record) => {
-    const building = mapObservation(record, streetNames);
+  const sourceBuildings = API_MODE === "aws" ? cloudBuildings : observations.map((record) => mapObservation(record, new Map(streets.map((street) => [asText(street.street_id), asText(street.name)]))));
+  const buildings = sourceBuildings.map((building) => {
     const discrepancy = discrepancyRecords.find((item) => item.observation_id === building.id);
     const review = reviews.find((item) => item.observationId === building.id);
     return {
@@ -244,7 +254,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const discrepancies = filteredBuildings.filter((building) => discrepancyIds.has(building.id) || building.status !== "MATCHED");
   const assetLabel = (value: string) => value.split(/[_\s-]+/).filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-  const assets: Asset[] = buildings.filter((building) => building.assetType !== "building").map((building) => ({
+  const assetSource = API_MODE === "aws" ? cloudAssets : observations.map((record) => mapObservation(record, streetNames)).filter((building) => building.assetType !== "building");
+  const assets: Asset[] = assetSource.map((building) => ({
     id: building.id,
     type: assetLabel(building.assetType ?? "other"),
     street: building.street, confidence: building.confidence, latitude: building.latitude,
@@ -257,6 +268,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     seeded, loading, busy, error, statusMessage, summary, studyArea, streets,
     observations, ocr, references, discrepancyRecords, reviews, metrics, runs,
     studyAreaMetadata, samplingPoints,
+    mapAssets: assetSource,
     buildings, filteredBuildings, discrepancies, assets, search, setSearch, statusFilter, setStatusFilter,
     buildingTypeFilter, setBuildingTypeFilter, confidenceFilter, setConfidenceFilter,
     selectedStreet, setSelectedStreet,

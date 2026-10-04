@@ -111,9 +111,9 @@ def _log(event_name: str, **fields: Any) -> None:
     LOGGER.info(json.dumps({"event": event_name, **fields}, separators=(",", ":"), default=str))
 
 
-def _emit_metrics(*, duration_ms: float, records: int, bedrock_calls: int, bedrock_attempts: int, bedrock_ms: float,
+def _emit_metrics(*, duration_ms: float, records: int, bedrock_calls: int, bedrock_attempts: int, bedrock_ms: float | None,
                   ddb_writes: int, errors: int) -> None:
-    print(json.dumps({
+    metric_log = {
         "_aws": {
             "Timestamp": int(time.time() * 1000),
             "CloudWatchMetrics": [{
@@ -138,15 +138,17 @@ def _emit_metrics(*, duration_ms: float, records: int, bedrock_calls: int, bedro
         "ProcessedRecordCount": records,
         "BedrockInvocationCount": bedrock_calls,
         "BedrockAttemptCount": bedrock_attempts,
-        "BedrockLatency": round(bedrock_ms, 3),
         "DynamoDBWriteCount": ddb_writes,
         "ProcessingErrorCount": errors,
-    }, separators=(",", ":")))
+    }
+    if bedrock_ms is not None:
+        metric_log["BedrockLatency"] = round(bedrock_ms, 3)
+    print(json.dumps(metric_log, separators=(",", ":")))
 
 
 def _extract_structured_response(response: dict[str, Any]) -> dict[str, Any]:
-    content = response.get("output", {}).get("message", {}).get("content", [])
-    text = next((item.get("text") for item in content if isinstance(item, dict) and item.get("text")), None)
+    content = response.get("output", {}).get("message", {}).get("content", []) if isinstance(response, dict) else []
+    text = next((item.get("text") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)), None)
     if not isinstance(text, str):
         raise ValueError("Nova Lite returned no structured text.")
     start, end = text.find("{"), text.rfind("}")
@@ -159,7 +161,12 @@ def _is_hard_case(record: dict[str, Any]) -> bool:
     if record.get("asset_type") != "building":
         return False
     attributes = record.get("attributes") or {}
-    confidence = float(record.get("confidence") or 0)
+    try:
+        confidence = float(record.get("confidence"))
+        if not math.isfinite(confidence):
+            confidence = 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
     use = attributes.get("building_use")
     floors = attributes.get("visible_floor_count")
     return confidence < 0.7 or floors is None or use in {None, "unknown"}
@@ -180,14 +187,21 @@ def _nearest_street_id(reference: dict[str, Any], observations: list[dict[str, A
 
 
 def _escalate_at_most_one(records: list[dict[str, Any]], *, bucket: str, prefix: str,
-                          s3_client: Any, ddb: Any, bedrock_client: Any | None) -> tuple[int, float, str]:
+                          s3_client: Any, ddb: Any, bedrock_client: Any | None) -> tuple[int, float | None, str]:
     if os.getenv("URBANLENS_LAMBDA_BEDROCK_ENABLED", "false").lower() != "true":
-        return 0, 0.0, "disabled"
+        for record in records:
+            record.setdefault("bedrock_review", {"status": "not_attempted", "attempted": False,
+                "fallback_used": False, "reason": "bedrock_escalation_disabled", "simulation": True})
+        return 0, None, "disabled"
     candidate = next((record for record in records if _is_hard_case(record)), None)
     if candidate is None:
-        return 0, 0.0, "no_ambiguous_cases"
+        for record in records:
+            record.setdefault("bedrock_review", {"status": "not_attempted", "attempted": False,
+                "fallback_used": False, "reason": "local_result_sufficient", "simulation": True})
+        return 0, None, "no_ambiguous_cases"
 
     observation_id = str(candidate.get("observation_id") or "")
+    profile = os.getenv("BEDROCK_INFERENCE_PROFILE", "apac.amazon.nova-lite-v1:0")
     if ddb is not None:
         try:
             existing = ddb.get_records(DATASET_ID, collection="observations")
@@ -195,32 +209,36 @@ def _escalate_at_most_one(records: list[dict[str, Any]], *, bucket: str, prefix:
             code = str(exc.response.get("Error", {}).get("Code", "ClientError"))
             state = "blocked" if code in {"AccessDeniedException", "AccessDenied"} else "failed"
             candidate["bedrock_review"] = {"status": state, "error_code": code, "reason": "dynamodb_read_before_escalation"}
-            return 0, 0.0, "dynamodb_blocked"
+            return 0, None, "dynamodb_blocked"
         cached = next((record for record in existing if record.get("observation_id") == observation_id), None)
-        if cached and (cached.get("bedrock_review") or {}).get("status") == "success":
+        if cached and (cached.get("bedrock_review") or {}).get("status") in {"success", "attempted_success"}:
             candidate["bedrock_review"] = cached["bedrock_review"]
-            return 0, float(cached["bedrock_review"].get("latency_ms") or 0), "already_reviewed"
-
-    view_id = candidate.get("source_view_id")
-    if not view_id:
-        candidate["bedrock_review"] = {"status": "skipped", "reason": "missing_source_view_id"}
-        return 0, 0.0, "missing_source_view_id"
-    image_key = f"{prefix}/{DATASET_ID}/evidence/{view_id}.png"
-    response = s3_client.get_object(Bucket=bucket, Key=image_key)
-    image_metadata = {str(key).lower(): str(value) for key, value in response.get("Metadata", {}).items()}
-    if image_metadata.get("dataset_id") != DATASET_ID or image_metadata.get("simulation") != "true" or image_metadata.get("source") != SIMULATION_SOURCE:
-        raise ValueError("Synthetic evidence provenance failed validation.")
-    body = response["Body"]
-    try:
-        image_bytes = body.read()
-    finally:
-        body.close()
-    if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise ValueError("Evidence object is not a valid PNG.")
+            candidate["model_route"] = "bedrock_nova_lite_escalation"
+            candidate["processing_route"] = "bedrock_nova_lite_escalation"
+            candidate["model_name"] = cached["bedrock_review"].get("model_name", profile)
+            candidate["latency_ms"] = cached["bedrock_review"].get("latency_ms")
+            return 0, cached["bedrock_review"].get("latency_ms"), "already_reviewed"
 
     started = time.perf_counter()
-    profile = os.getenv("BEDROCK_INFERENCE_PROFILE", "apac.amazon.nova-lite-v1:0")
+    request_started = False
     try:
+        view_id = candidate.get("source_view_id")
+        if not view_id:
+            raise ValueError("missing_source_view_id")
+        image_key = f"{prefix}/{DATASET_ID}/evidence/{view_id}.png"
+        response = s3_client.get_object(Bucket=bucket, Key=image_key)
+        image_metadata = {str(key).lower(): str(value) for key, value in response.get("Metadata", {}).items()}
+        if image_metadata.get("dataset_id") != DATASET_ID or image_metadata.get("simulation") != "true" or image_metadata.get("source") != SIMULATION_SOURCE:
+            raise ValueError("Synthetic evidence provenance failed validation.")
+        body = response["Body"]
+        try:
+            image_bytes = body.read()
+        finally:
+            body.close()
+        if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError("Evidence object is not a valid PNG.")
+
+        request_started = True
         model_response, latency_ms = invoke_image(
             bedrock_client or _get_bedrock_client(),
             model_id=profile,
@@ -237,7 +255,9 @@ def _escalate_at_most_one(records: list[dict[str, Any]], *, bucket: str, prefix:
         )
         structured = _extract_structured_response(model_response)
         candidate["bedrock_review"] = {
-            "status": "success",
+            "status": "attempted_success",
+            "attempted": True,
+            "fallback_used": False,
             "model_name": profile,
             "aws_service": "Amazon Bedrock Runtime",
             "processing_route": "bedrock_nova_lite_escalation",
@@ -251,6 +271,7 @@ def _escalate_at_most_one(records: list[dict[str, Any]], *, bucket: str, prefix:
             "result": structured,
         }
         candidate["model_name"] = profile
+        candidate["model_route"] = "bedrock_nova_lite_escalation"
         candidate["processing_route"] = "bedrock_nova_lite_escalation"
         candidate["latency_ms"] = latency_ms
         candidate["estimated_cost"] = None
@@ -258,22 +279,28 @@ def _escalate_at_most_one(records: list[dict[str, Any]], *, bucket: str, prefix:
         return 1, latency_ms, "success"
     except ClientError as exc:
         code = str(exc.response.get("Error", {}).get("Code", "ClientError"))
-        state = "blocked" if code in {"AccessDeniedException", "AccessDenied"} else "failed"
-        latency_ms = round((time.perf_counter() - started) * 1000, 3)
+        state = "attempted_failed" if request_started else "fallback_to_local"
+        latency_ms = round((time.perf_counter() - started) * 1000, 3) if request_started else None
         candidate["bedrock_review"] = {
-            "status": state, "error_code": code, "model_name": profile,
+            "status": state, "attempted": request_started, "fallback_used": True,
+            "error_code": code, "model_name": profile,
             "aws_service": "Amazon Bedrock Runtime", "processing_route": "bedrock_nova_lite_escalation",
             "latency_ms": latency_ms, "estimated_cost": None, "cost_status": "unavailable", "simulation": True,
+            "preparation_latency_ms": round((time.perf_counter() - started) * 1000, 3) if not request_started else None,
         }
-        return 0, latency_ms, state
+        return 0, latency_ms, "failed" if request_started else "fallback_to_local"
     except Exception as exc:
-        latency_ms = round((time.perf_counter() - started) * 1000, 3)
+        latency_ms = round((time.perf_counter() - started) * 1000, 3) if request_started else None
         candidate["bedrock_review"] = {
-            "status": "failed", "error_code": type(exc).__name__, "model_name": profile,
+            "status": "attempted_failed" if request_started else "fallback_to_local",
+            "attempted": request_started, "fallback_used": True,
+            "error_code": type(exc).__name__, "model_name": profile,
+            "reason": str(exc) if not request_started else None,
             "processing_route": "bedrock_nova_lite_escalation", "latency_ms": latency_ms,
+            "preparation_latency_ms": round((time.perf_counter() - started) * 1000, 3) if not request_started else None,
             "estimated_cost": None, "cost_status": "unavailable", "simulation": True,
         }
-        return 0, latency_ms, "failed"
+        return 0, latency_ms, "failed" if request_started else "fallback_to_local"
 
 
 def _log_api(path: str, method: str, status: int, duration_ms: float, count: int = 0) -> None:
@@ -627,5 +654,5 @@ def handler(event: dict[str, Any], context: Any, *, s3_client: Any | None = None
         code = str(exc.response.get("Error", {}).get("Code", type(exc).__name__)) if isinstance(exc, ClientError) else type(exc).__name__
         _log("s3_processing_failed", dataset_id=DATASET_ID, error_code=code, simulation=True)
         _emit_metrics(duration_ms=0, records=0, bedrock_calls=0, bedrock_attempts=0,
-                  bedrock_ms=0, ddb_writes=0, errors=1)
+                  bedrock_ms=None, ddb_writes=0, errors=1)
         raise

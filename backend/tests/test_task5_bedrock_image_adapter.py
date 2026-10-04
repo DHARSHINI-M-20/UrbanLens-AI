@@ -67,5 +67,22 @@ def test_structured_parser_normalizes_parallel_synthetic_scene_arrays():
     })})
     assert parsed.building_use == "retail"
     assert parsed.visible_floor_count is None
-    assert parsed.confidence == 0.0
-    assert parsed.uncertainty_indicators == ["floor_count_not_numeric", "qualitative_confidence_not_numeric"]
+    assert parsed.confidence is None
+    assert len(parsed.objects) == 2
+    assert parsed.objects[0]["visible_floor_count"] is None
+    assert parsed.objects[1]["visible_floor_count"] == 3
+    assert parsed.objects[1]["confidence"] == 0.84
+    assert parsed.uncertainty_indicators == ["floor_count_not_numeric", "confidence_not_numeric"]
+
+
+def test_structured_parser_preserves_multiple_object_ids_and_unknown_confidence():
+    service = BedrockService(region="ap-south-1", inference_profile="apac.amazon.nova-lite-v1:0")
+    parsed = service.parse_structured_response({"text": json.dumps({"buildings": [
+        {"object_id": "building-a", "building_use": "retail", "visible_floor_count": 2},
+        {"building_id": "building-b", "building_use": "residential", "confidence": 0.76},
+    ]})})
+    assert parsed.confidence is None
+    assert parsed.objects[0]["object_id"] == "building-a"
+    assert parsed.objects[0]["confidence"] is None
+    assert parsed.objects[1]["building_id"] == "building-b"
+    assert parsed.objects[1]["visible_floor_count"] is None

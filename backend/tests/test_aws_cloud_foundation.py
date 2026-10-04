@@ -320,8 +320,69 @@ def test_cloud_lambda_escalates_at_most_one_case_and_reuses_saved_result(monkeyp
     assert second["bedrock"]["invocations"] == 0
     assert runtime.calls == runtime.calls[:1]
     saved = dynamodb.records["observations"][0]
-    assert saved["bedrock_review"]["status"] == "success"
+    assert saved["bedrock_review"]["status"] == "attempted_success"
+    assert saved["bedrock_review"]["attempted"] is True
+    assert saved["model_route"] == "bedrock_nova_lite_escalation"
     assert saved["simulation"] is True
+
+
+class FailingNovaRuntime:
+    def converse(self, **request):
+        raise ClientError({"Error": {"Code": "ThrottlingException", "Message": "rate limited"}}, "Converse")
+
+
+def test_cloud_lambda_bedrock_failure_falls_back_and_persists_attempt_metrics(monkeypatch):
+    monkeypatch.setenv("AWS_REGION", "ap-south-1")
+    monkeypatch.setenv("URBANLENS_S3_BUCKET", "bucket")
+    monkeypatch.setenv("URBANLENS_DYNAMODB_TABLE", "fai-tce-team11-urbanlens-records")
+    monkeypatch.setenv("URBANLENS_LAMBDA_BEDROCK_ENABLED", "true")
+    dynamodb = FakeCloudDynamoDB()
+    event = {"dataset_id": "tn_study_area_demo_v1", "bucket": "bucket", "key": "urbanlens/datasets/tn_study_area_demo_v1/observations/observations.json"}
+
+    result = cloud_lambda.handler(event, None, s3_client=FakeCloudS3(_cloud_observation_payload()),
+                                  dynamodb_service=dynamodb, bedrock_client=FailingNovaRuntime())
+
+    saved = dynamodb.records["observations"][0]
+    metrics = dynamodb.records["processing_metrics"][0]
+    assert result["status"] == "success"
+    assert result["bedrock"]["status"] == "failed"
+    assert result["bedrock"]["attempts"] == 1
+    assert result["bedrock"]["invocations"] == 0
+    assert saved["model_route"] == "small_model"
+    assert saved["bedrock_review"]["status"] == "attempted_failed"
+    assert saved["bedrock_review"]["fallback_used"] is True
+    assert saved["bedrock_review"]["error_code"] == "ThrottlingException"
+    assert metrics["bedrock_invocation_attempts"] == 1
+
+
+def test_cloud_lambda_missing_evidence_records_local_fallback_without_bedrock_attempt(monkeypatch):
+    class MissingEvidenceS3(FakeCloudS3):
+        def get_object(self, *, Bucket, Key):
+            if Key.endswith(".png"):
+                raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+            return super().get_object(Bucket=Bucket, Key=Key)
+
+    monkeypatch.setenv("AWS_REGION", "ap-south-1")
+    monkeypatch.setenv("URBANLENS_S3_BUCKET", "bucket")
+    monkeypatch.setenv("URBANLENS_DYNAMODB_TABLE", "fai-tce-team11-urbanlens-records")
+    monkeypatch.setenv("URBANLENS_LAMBDA_BEDROCK_ENABLED", "true")
+    dynamodb = FakeCloudDynamoDB()
+    event = {"dataset_id": "tn_study_area_demo_v1", "bucket": "bucket", "key": "urbanlens/datasets/tn_study_area_demo_v1/observations/observations.json"}
+    runtime = FakeNovaRuntime()
+
+    result = cloud_lambda.handler(event, None, s3_client=MissingEvidenceS3(_cloud_observation_payload()),
+                                  dynamodb_service=dynamodb, bedrock_client=runtime)
+
+    saved = dynamodb.records["observations"][0]
+    assert result["status"] == "success"
+    assert result["bedrock"]["status"] == "fallback_to_local"
+    assert result["bedrock"]["attempts"] == 0
+    assert result["bedrock"]["invocations"] == 0
+    assert result["bedrock"]["latency_ms"] is None
+    assert saved["bedrock_review"]["status"] == "fallback_to_local"
+    assert saved["bedrock_review"]["fallback_used"] is True
+    assert saved["bedrock_review"]["latency_ms"] is None
+    assert runtime.calls == []
 
 
 def test_cloud_api_returns_frontend_compatible_dataset_and_observations(monkeypatch):

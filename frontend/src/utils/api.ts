@@ -1,6 +1,27 @@
-export const API_MODE = (import.meta.env.VITE_API_MODE as string | undefined)?.toLowerCase() === "aws" ? "aws" : "local";
+export const CLOUD_API_BASE = "https://iv8dv4cz59.execute-api.ap-south-1.amazonaws.com";
+const configuredMode = (import.meta.env.VITE_API_MODE as string | undefined)?.toLowerCase();
+export const API_MODE = configuredMode === "local" ? "local" : "aws";
 const configuredApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "");
-const apiBase = API_MODE === "aws" ? configuredApiBase ?? "" : configuredApiBase ?? "/api";
+const apiBase = API_MODE === "aws" ? configuredApiBase ?? CLOUD_API_BASE : configuredApiBase ?? "/api";
+
+type ApiRecord = Record<string, unknown>;
+interface DatasetStatusResponse extends ApiRecord {
+  seeded: boolean;
+  dataset_id: string;
+  simulation: boolean;
+  dataset?: ApiRecord;
+}
+interface AnalyticsResponse extends ApiRecord {
+  dataset_id: string;
+  simulation: boolean;
+  streets_covered?: number;
+  buildings_analysed?: number;
+  unmatched_properties?: number;
+  building_use_distribution?: Record<string, number>;
+  floor_distribution?: Record<string, number>;
+  asset_type_distribution?: Record<string, number>;
+  match_status_distribution?: Record<string, number>;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (API_MODE === "aws" && !apiBase) {
@@ -21,6 +42,7 @@ const encodedDataset = (datasetId: string) => `?dataset_id=${encodeURIComponent(
 
 export const api = {
   mode: API_MODE,
+  datasets: () => request<DatasetStatusResponse>("/datasets"),
   demoStatus: () => request<Record<string, unknown>>("/demo/status"),
   seedDemo: () => API_MODE === "aws" ? Promise.reject(new Error("Demo seeding is local-only.")) : request<Record<string, unknown>>("/demo/seed?confirm=true", { method: "POST" }),
   processDemo: () => API_MODE === "aws" ? Promise.reject(new Error("Demo processing is invoked through the controlled AWS pipeline.")) : request<Record<string, unknown>>("/demo/process", { method: "POST" }),
@@ -39,7 +61,9 @@ export const api = {
   reviews: (id: string) => request<Record<string, unknown>[]>(`/reviews${encodedDataset(id)}`),
   metrics: (id: string) => request<Record<string, unknown>[]>(`/metrics${encodedDataset(id)}`),
   metricsSummary: (id: string) => request<Record<string, unknown>>(`/metrics/summary${encodedDataset(id)}`),
-  analytics: (id: string) => request<Record<string, unknown>>(`/analytics/summary${encodedDataset(id)}`),
+  analytics: (id: string) => request<AnalyticsResponse>(`/analytics${encodedDataset(id)}`),
+  buildings: (id: string) => request<ApiRecord[]>(`/buildings${encodedDataset(id)}`),
+  assets: (id: string) => request<ApiRecord[]>(`/assets${encodedDataset(id)}`),
   runs: async (id: string) => {
     try {
       return await request<Record<string, unknown>[]>(`/demo/runs${encodedDataset(id)}`);
