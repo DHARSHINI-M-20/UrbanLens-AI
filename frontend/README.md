@@ -17,7 +17,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8001
 ```
 
 Configure the repository-root `.env` as needed. At minimum, local persistence requires `MONGODB_URI` and `MONGODB_DATABASE`. From another terminal:
@@ -28,7 +28,7 @@ npm ci
 npm run dev
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:8000`; the development proxy is same-origin from the browser. The banner reports backend errors and provides a retry action. It identifies the fixed dataset as `tn_study_area_demo_v1` and labels its records synthetic. The dashboard does not offer arbitrary dataset selection; AWS mode is fixed to the cloud demo dataset. Use **Seed demo** to populate the local simulated dataset. Reseed and reset require confirmation and affect only that demo dataset.
+Vite proxies `/api` to `http://127.0.0.1:8001` by default; set `URBANLENS_BACKEND_PROXY_TARGET` if FastAPI runs on another port. The development proxy is same-origin from the browser. The banner reports backend errors and provides a retry action. It identifies the fixed dataset as `tn_study_area_demo_v1` and labels its records synthetic. The dashboard does not offer arbitrary dataset selection; AWS mode is fixed to the cloud demo dataset. Use **Seed demo** to populate the local simulated dataset. Reseed and reset require confirmation and affect only that demo dataset.
 
 ## API mode
 

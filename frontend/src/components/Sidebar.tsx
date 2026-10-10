@@ -2,9 +2,13 @@ import { NavLink } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { NAV_MAIN, NAV_MANAGEMENT, type NavItem } from "../data/navigation";
 import { useDashboard } from "../context/DashboardContext";
+import { useAuth } from "../auth/AuthProvider";
+import { PAGE_PERMISSIONS } from "../auth/permissions";
 
 export default function Sidebar() {
   const { seeded, error } = useDashboard();
+  const { user } = useAuth();
+  const permitted = (item: NavItem) => Boolean(user && PAGE_PERMISSIONS[item.path]?.includes(user.role));
   const renderItem = (item: NavItem) => {
     const Icon = item.icon;
 
@@ -52,12 +56,12 @@ export default function Sidebar() {
 
       <nav className="flex flex-col gap-1.5">
         <p className="px-3.5 pb-1 text-[10px] font-bold tracking-widest text-indigo-300/70">MAIN MENU</p>
-        {NAV_MAIN.map(renderItem)}
+        {NAV_MAIN.filter(permitted).map(renderItem)}
       </nav>
 
       <nav className="flex flex-col gap-1.5">
         <p className="px-3.5 pb-1 text-[10px] font-bold tracking-widest text-indigo-300/70">MANAGEMENT</p>
-        {NAV_MANAGEMENT.map(renderItem)}
+        {NAV_MANAGEMENT.filter(permitted).map(renderItem)}
       </nav>
 
       <div className="mt-auto flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 p-3">

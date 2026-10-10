@@ -21,3 +21,21 @@ test("dashboard route wiring and five-query UI keep provenance and unavailable s
   assert.match(queryPage, /NOT REAL STREET VIEW/);
   assert.match(queryPage, /Fixed cloud demo dataset/);
 });
+
+test("authentication route, role guards, user administration, and demo labels are wired", async () => {
+  const [app, permissions, authProvider, guards, login, adminUsers, authApi] = await Promise.all([
+    read("src/App.tsx"), read("src/auth/permissions.ts"), read("src/auth/AuthProvider.tsx"),
+    read("src/auth/RouteGuards.tsx"), read("src/pages/LoginPage.tsx"),
+    read("src/pages/UserManagementPage.tsx"), read("src/auth/authApi.ts"),
+  ]);
+  assert.match(app, /path="\/login"/);
+  assert.match(app, /path="\/403"/);
+  assert.match(app, /path="\/admin\/users"/);
+  assert.match(guards, /canVisit\(user\.role, location\.pathname\)/);
+  assert.match(permissions, /administrator.*analyst.*reviewer.*viewer/s);
+  assert.match(authProvider, /urbanlens_session_expires/);
+  assert.match(authProvider, /authApi\.logout\(\)/);
+  assert.match(login, /type=\{showPassword \? "text" : "password"\}/);
+  assert.match(adminUsers, /authApi\.createUser/);
+  assert.match(authApi, /credentials: "include"/);
+});

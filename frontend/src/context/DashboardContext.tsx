@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { API_MODE, api } from "../utils/api";
 import { nullableCoordinate, nullableNumber, nullablePercent } from "../utils/recordValues";
 import type { Asset, Building, ReviewItem } from "../types";
+import { useAuth } from "../auth/AuthProvider";
 
 export const DEMO_DATASET_ID = "tn_study_area_demo_v1";
 export const DEMO_BANNER = "Source: SIMULATED_TAMIL_NADU_DATA. Observations and references are generated demonstration records, not an official property register.";
@@ -125,6 +126,7 @@ function confidenceBucket(value: number | null) {
 }
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [seeded, setSeeded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -160,7 +162,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       const [status, area, nextAwsStatus] = await Promise.all([
         API_MODE === "aws" ? api.datasets() : api.demoStatus(),
         api.studyArea(),
-        API_MODE === "aws" ? api.awsStatus() : Promise.resolve(null),
+        API_MODE === "aws" && user?.role === "administrator" ? api.awsStatus() : Promise.resolve(null),
       ]);
       setAwsStatus(nextAwsStatus);
       setStudyArea(area.geojson);
@@ -174,12 +176,14 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setReferences([]); setDiscrepancyRecords([]); setReviews([]); setMetrics([]); setRuns([]);
         return;
       }
+      const canReview = user?.role === "administrator" || user?.role === "reviewer";
+      const canSeeHistory = user?.role === "administrator" || user?.role === "analyst";
       const [nextStreets, nextSamples, nextObservations, nextOcr, nextReferences,
         nextDiscrepancies, nextReviews, nextMetrics, nextSummary, nextRuns] = await Promise.all([
         api.streets(DEMO_DATASET_ID), api.samples(DEMO_DATASET_ID),
         api.observations(DEMO_DATASET_ID), api.ocr(DEMO_DATASET_ID), api.references(DEMO_DATASET_ID),
-        api.discrepancies(DEMO_DATASET_ID), api.reviews(DEMO_DATASET_ID),
-        api.metrics(DEMO_DATASET_ID), api.analytics(DEMO_DATASET_ID), api.runs(DEMO_DATASET_ID),
+        api.discrepancies(DEMO_DATASET_ID), canReview ? api.reviews(DEMO_DATASET_ID) : Promise.resolve([]),
+        api.metrics(DEMO_DATASET_ID), api.analytics(DEMO_DATASET_ID), canSeeHistory ? api.runs(DEMO_DATASET_ID) : Promise.resolve([]),
       ]);
       const [nextCloudBuildings, nextCloudAssets] = API_MODE === "aws"
         ? await Promise.all([api.buildings(DEMO_DATASET_ID), api.assets(DEMO_DATASET_ID)])
@@ -210,7 +214,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(); }, 0);

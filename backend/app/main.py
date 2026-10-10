@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     analytics,
+    auth,
     aws_integration,
     demo,
     discrepancies,
@@ -28,11 +29,14 @@ from app.api import (
 )
 from app.config import get_settings
 from app.database.mongodb import check_connection
+from app.security import (SESSION_COOKIE, can_access_api,
+                          initialize_auth_store, resolve_session)
 
 settings = get_settings()
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Check optional MongoDB connectivity when the local API starts."""
+    initialize_auth_store()
     application.state.mongodb_reachable = check_connection(create_schema=True)
     yield
 
@@ -43,11 +47,11 @@ if "*" in cors_origins:
     raise RuntimeError("URBANLENS_CORS_ORIGINS must list explicit origins; wildcard CORS is not allowed.")
 app.add_middleware(CORSMiddleware, allow_origins=cors_origins,
                    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-                   allow_headers=["Content-Type"], allow_credentials=False)
+                   allow_headers=["Content-Type", "X-CSRF-Token"], allow_credentials=True)
 
 
 @app.middleware("http")
-async def enforce_local_mutation_and_body_limits(request: Request, call_next):
+async def enforce_local_mutation_body_limits_and_authorization(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -63,7 +67,27 @@ async def enforce_local_mutation_and_body_limits(request: Request, call_next):
             trusted_local = False
         if not trusted_local:
             return JSONResponse(status_code=403, content={"detail": "Mutation endpoints are restricted to the local development host."})
+    path = request.url.path
+    if request.method == "OPTIONS" or path in {
+        "/health", "/auth/login", "/auth/register", "/auth/setup/status", "/auth/setup/administrator"
+    }:
+        return await call_next(request)
+    session = resolve_session(request.cookies.get(SESSION_COOKIE))
+    if session is None:
+        return JSONResponse(status_code=401, content={"detail": "Authentication required."})
+    request.state.auth_session = session
+    if request.method not in {"GET", "HEAD"}:
+        supplied_csrf = request.headers.get("x-csrf-token", "")
+        if not supplied_csrf or not secrets_compare(supplied_csrf, session["csrf_token"]):
+            return JSONResponse(status_code=403, content={"detail": "Valid CSRF token required."})
+    if not path.startswith("/auth/") and not can_access_api(session["user"]["role"], path, request.method):
+        return JSONResponse(status_code=403, content={"detail": "Your role is not permitted to access this endpoint."})
     return await call_next(request)
+
+
+def secrets_compare(left: str, right: str) -> bool:
+    import hmac
+    return hmac.compare_digest(left, right)
 
 
 @app.get("/health", tags=["health"])
@@ -100,3 +124,4 @@ app.include_router(aws_integration.router, prefix="/aws", tags=["aws"])
 app.include_router(demo.router, prefix="/demo", tags=["demo"])
 app.include_router(queries.router, prefix="/queries", tags=["queries"])
 app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
+app.include_router(auth.router)

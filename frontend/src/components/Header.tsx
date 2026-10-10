@@ -1,14 +1,20 @@
 import { useLocation } from "react-router-dom";
+import { useState } from "react";
 import { Bell, ChevronDown, Command, Search } from "lucide-react";
 
 import { NAV_MAIN, NAV_MANAGEMENT } from "../data/navigation";
 import { useDashboard } from "../context/DashboardContext";
+import { useAuth } from "../auth/AuthProvider";
+import { roleLabel } from "../auth/permissions";
 
 const ALL_NAV = [...NAV_MAIN, ...NAV_MANAGEMENT];
 
 export default function Header() {
   const { pathname } = useLocation();
   const { search, setSearch } = useDashboard();
+  const { user, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   const current = ALL_NAV.find((n) => n.path === pathname);
   const activeLabel = current?.label ?? "Dashboard";
@@ -41,16 +47,23 @@ export default function Header() {
           <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-cyan-400" />
         </button>
 
-        <button className="flex shrink-0 items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-1.5 pr-3 transition hover:bg-white/10">
+        <div className="relative">
+        <button onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-label="Open user profile menu" className="flex shrink-0 items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-1.5 pr-3 transition hover:bg-white/10">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-violet-500 text-xs font-extrabold text-white">
-            TS
+            {(user?.name ?? "U").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}
           </div>
           <div className="hidden text-left sm:block">
-            <strong className="block text-xs font-bold leading-tight text-white">Urban Analyst</strong>
-            <span className="block text-[10px] leading-tight text-slate-400">Administrator</span>
+            <strong className="block max-w-32 truncate text-xs font-bold leading-tight text-white">{user?.name ?? "User"}</strong>
+            <span className="block text-[10px] leading-tight text-slate-400">{user ? roleLabel(user.role) : ""}</span>
           </div>
           <ChevronDown size={14} className="hidden text-slate-500 sm:block" />
         </button>
+        {profileOpen && <div className="absolute right-0 top-12 z-50 min-w-48 rounded-xl border border-white/10 bg-[#11162d] p-2 shadow-xl">
+          <div className="border-b border-white/10 px-3 py-2"><strong className="block truncate text-xs text-white">{user?.name}</strong><span className="block text-[10px] text-cyan-300">{user && roleLabel(user.role)}</span></div>
+          {logoutError && <p role="alert" className="m-2 text-[10px] text-red-300">{logoutError}</p>}
+          <button onClick={() => { setLogoutError(null); void logout().catch((cause: unknown) => setLogoutError(cause instanceof Error ? cause.message : "Could not sign out.")); }} className="mt-1 w-full rounded-lg px-3 py-2 text-left text-xs text-slate-200 hover:bg-white/10">Sign out</button>
+        </div>}
+        </div>
       </div>
     </header>
   );

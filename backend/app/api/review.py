@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from pymongo.errors import PyMongoError
 
 from app.database.mongodb import get_collection
 from app.services.study_area_service import STUDY_AREA_ID
+from app.security import current_session
 
 router = APIRouter()
 
@@ -59,11 +60,11 @@ def create_review(payload: ReviewInput) -> dict[str, Any]:
 
 
 @router.patch("/{review_id}/decision")
-def record_review_decision(review_id: str, payload: ReviewDecisionInput) -> dict[str, Any]:
+def record_review_decision(review_id: str, payload: ReviewDecisionInput, request: Request) -> dict[str, Any]:
     reviewed_at = datetime.now(timezone.utc).isoformat()
     updates = {
         "status": payload.status,
-        "reviewer": payload.reviewer.strip(),
+        "reviewer": current_session(request)["user"]["email"],
         "reviewer_decision": payload.reviewer_decision,
         "reviewed_at": reviewed_at,
         "reviewer_note": payload.reviewer_note,

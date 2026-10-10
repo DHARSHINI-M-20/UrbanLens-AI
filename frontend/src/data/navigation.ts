@@ -7,6 +7,7 @@ import {
   Map,
   Settings,
   ShieldCheck,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,4 +30,5 @@ export const NAV_MAIN: NavItem[] = [
 export const NAV_MANAGEMENT: NavItem[] = [
   { id: "review", label: "Review Queue", icon: ShieldCheck, path: "/review" },
   { id: "settings", label: "Settings", icon: Settings, path: "/settings" },
+  { id: "users", label: "User Management", icon: Users, path: "/admin/users" },
 ];

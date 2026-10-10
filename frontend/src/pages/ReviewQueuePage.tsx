@@ -1,8 +1,10 @@
 import ReviewQueue from "../components/ReviewQueue";
 import { useDashboard } from "../context/DashboardContext";
+import { useAuth } from "../auth/AuthProvider";
 
 export default function ReviewQueuePage() {
   const { reviews, apiMode } = useDashboard();
+  const { user } = useAuth();
   return (
     <div>
       <div className="mb-5">
@@ -12,7 +14,7 @@ export default function ReviewQueuePage() {
           {apiMode === "aws" ? "Cloud review records are read-only." : "Confirm, reject or correct low-confidence AI observations."}
         </p>
       </div>
-      <ReviewQueue items={reviews} readOnly={apiMode === "aws"} />
+      <ReviewQueue items={reviews} readOnly={apiMode === "aws" || user?.role !== "administrator" && user?.role !== "reviewer"} />
     </div>
   );
 }
