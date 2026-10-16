@@ -1,10 +1,12 @@
 import { RefreshCw, RotateCcw, Database, Play } from "lucide-react";
 
 import { DEMO_BANNER, DEMO_DATASET_ID, useDashboard } from "../context/DashboardContext";
+import { getBedrockExecutionStatus } from "../utils/bedrockExecution";
 
 export default function DemoModeBanner() {
-  const { apiMode, awsStatus, seeded, loading, busy, error, statusMessage, summary, refresh, seedDemo, processDemo, resetDemo } = useDashboard();
+  const { apiMode, awsStatus, seeded, loading, busy, error, statusMessage, summary, metrics, observations, refresh, seedDemo, processDemo, resetDemo } = useDashboard();
   const awsBedrock = awsStatus?.bedrock as Record<string, unknown> | undefined;
+  const bedrockExecution = getBedrockExecutionStatus(metrics, observations);
   const confirmReset = () => {
     if (window.confirm("Delete only the simulated demo dataset from the local database?")) void resetDemo();
   };
@@ -22,8 +24,8 @@ export default function DemoModeBanner() {
         <span className="mt-1 block text-[10px] text-amber-100/75">Google Street View integration is pending authorization from FarmwiseAI.</span>
         <span className="mt-1 block text-[10px] text-amber-100/65">Dataset: {DEMO_DATASET_ID} · source mode: {apiMode === "aws" ? "AWS cloud API" : "local API"}</span>
         {apiMode === "aws" && (
-          <span className="mt-1 block text-[10px] text-emerald-200/80">
-            AWS resource flags are configuration/status responses, not proof of current reachability. Bedrock execution: NOT VERIFIED{awsBedrock?.lambda_enabled ? " (enabled flag set)" : ""}.
+          <span className="mt-1 block text-[10px] text-emerald-200/80" role="status">
+            AWS resource flags are configuration/status responses, not proof of current reachability. {bedrockExecution.message}{awsBedrock?.lambda_enabled && !bedrockExecution.verified ? " (enabled flag set)" : ""}
           </span>
         )}
         {loading && <span role="status" className="mt-1 block text-[11px] text-slate-300">Loading dataset status…</span>}
